@@ -1,0 +1,12 @@
+.env
+.venv/
+pycache/
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+*.log
+atlas_memory.jsonl
+session_history.jsonl
+atlas_study_log.txt
+.DS_Store

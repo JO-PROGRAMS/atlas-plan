@@ -16,3 +16,6 @@ google-genai>=1.0.0
 
 # HTTP
 requests>=2.31.0
+
+# Environment variables
+python-dotenv>=1.0.1

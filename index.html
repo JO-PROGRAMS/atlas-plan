@@ -93,11 +93,15 @@ body.cc #cd{transform:translate(-50%,-50%) scale(.5)}
 .brand-text{display:flex;flex-direction:column;min-width:0}
 .brand-name{font-family:'Instrument Serif',serif;font-size:16px;color:var(--t0);letter-spacing:-.2px;line-height:1}
 .brand-ver{font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:2px}
-.x-notion{display:flex;align-items:center;gap:5px;flex-shrink:0}
-.x-sep{font-size:17px;color:var(--t3);font-weight:200;line-height:1;letter-spacing:0}
-.notion-orb{width:21px;height:21px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:transform .2s var(--ease),box-shadow .2s}
-.notion-orb:hover{transform:scale(1.15);box-shadow:0 4px 14px rgba(255,255,255,.2)}
-.notion-orb svg{width:12px;height:12px}
+.x-notion{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.x-sep{font-size:20px;color:var(--t3);font-weight:300;line-height:1}
+.notion-orb{width:28px;height:28px;background:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.5);transition:transform .2s var(--ease),box-shadow .2s}
+.notion-orb:hover{transform:scale(1.08);box-shadow:0 6px 18px rgba(255,255,255,.2)}
+.notion-orb svg{width:16px;height:16px}
+.notion-letter{font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;color:#111;letter-spacing:-.5px}
+.source-pill{font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--teal);border:1px solid rgba(6,200,216,.25);padding:2px 7px;border-radius:20px;letter-spacing:.3px}
+.sb-reopen{position:absolute;top:10px;left:10px;width:32px;height:32px;border-radius:10px;border:1px solid var(--rim2);background:rgba(9,12,20,.6);color:var(--t2);display:none;align-items:center;justify-content:center;z-index:20;transition:all .18s}
+.sb-reopen:hover{background:var(--rim2);color:var(--t0)}
 .sb-toggle{width:26px;height:26px;border-radius:7px;background:var(--rim);border:1px solid var(--rim2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--t3);transition:all .18s;font-size:11px}
 .sb-toggle:hover{background:var(--rim2);color:var(--t1)}
 
@@ -245,26 +249,51 @@ body.cc #cd{transform:translate(-50%,-50%) scale(.5)}
 
 /* ═══════ TASKS ═══════ */
 #p-tasks{background:transparent}
-.tgrid{flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;align-content:start;max-height:100%}
-.tcard{background:rgba(13,18,32,.88);border:1px solid var(--rim);border-radius:12px;padding:12px 13px;position:relative;overflow:hidden;transition:transform .2s var(--ease),border-color .18s,box-shadow .2s;animation:cardPop .3s var(--ease) both;backdrop-filter:blur(6px)}
-.tcard::before{content:'';position:absolute;top:0;left:0;right:0;height:1.5px}
-.tcard.ph::before{background:var(--red)}.tcard.pm::before{background:var(--gold)}.tcard.pl::before{background:var(--grn)}
-.tcard:hover{transform:translateY(-3px);border-color:var(--rim2);box-shadow:0 10px 32px rgba(0,0,0,.5)}
+.tgrid{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:20px 24px 28px;
+  display:flex;flex-direction:column;gap:12px;align-items:center;
+  max-height:100%;
+}
+.tgrid .empty{max-width:860px;margin:0 auto}
+.tcard{
+  width:100%;max-width:860px;margin:0 auto;
+  background:linear-gradient(180deg,rgba(14,20,36,.92),rgba(11,15,28,.88));
+  border:1px solid var(--rim);border-radius:16px;padding:14px 15px;position:relative;overflow:hidden;
+  transition:transform .22s var(--ease),border-color .18s,box-shadow .22s,opacity .2s;
+  animation:cardPop .3s var(--ease) both;backdrop-filter:blur(8px)
+}
+.tcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.tcard.ph::before{background:linear-gradient(90deg,var(--red),rgba(240,96,96,.2))}
+.tcard.pm::before{background:linear-gradient(90deg,var(--gold),rgba(245,166,35,.2))}
+.tcard.pl::before{background:linear-gradient(90deg,var(--grn),rgba(46,219,146,.2))}
+.tcard:hover{transform:translateY(-4px);border-color:var(--rim2);box-shadow:0 16px 38px rgba(0,0,0,.55),0 0 24px rgba(77,144,255,.08)}
+.tcard.dragging{opacity:.6;transform:scale(.98);box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.tcard.new{animation:cardNew .45s var(--ease) both}
+.tcard.updated{animation:cardPulse .6s var(--ease) both}
 @keyframes cardPop{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
-.tc-title{font-size:13px;font-weight:500;color:var(--t0);margin-bottom:4px;line-height:1.35;word-break:break-word}
-.tc-sum{font-size:11px;color:var(--t2);line-height:1.45;margin-bottom:7px;font-weight:300;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.tc-tags{display:flex;flex-wrap:wrap;gap:5px}
+@keyframes cardNew{from{transform:translateY(10px) scale(.98);opacity:.2}to{transform:none;opacity:1}}
+@keyframes cardPulse{0%{box-shadow:0 0 0 rgba(77,144,255,0)}60%{box-shadow:0 0 26px rgba(77,144,255,.25)}100%{box-shadow:0 0 0 rgba(77,144,255,0)}}
+.tc-title{font-size:14px;font-weight:600;color:var(--t0);margin-bottom:6px;line-height:1.35;word-break:break-word}
+.tc-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.tc-ic{font-size:14px;flex-shrink:0;margin-top:1px}
+.tc-handle{margin-left:auto;font-size:12px;letter-spacing:1px;color:var(--t3);opacity:.5;cursor:grab;user-select:none}
+.tcard.dragging .tc-handle{cursor:grabbing}
+.tc-sum{font-size:11.5px;color:var(--t2);line-height:1.5;margin-bottom:9px;font-weight:300;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tc-tags{display:flex;flex-wrap:wrap;gap:6px}
 .tag{font-size:10px;padding:2.5px 7.5px;border-radius:5px;font-family:'JetBrains Mono',monospace}
 .td{background:rgba(46,219,146,.12);color:#6ee7b7}.tp{background:rgba(77,144,255,.12);color:#93c5fd}
 .tpl{background:rgba(139,114,255,.12);color:#c4b5fd}.tn{background:rgba(255,255,255,.05);color:var(--t3)}
 .thi{background:rgba(240,96,96,.12);color:#fca5a5}.tme{background:rgba(245,166,35,.12);color:#fde68a}
 .tlo{background:rgba(46,219,146,.12);color:#6ee7b7}.tef{background:rgba(6,200,216,.1);color:#67e8f9}
 .tdu{background:rgba(255,255,255,.05);color:var(--t3)}
-.tc-actions{display:flex;gap:5px;margin-top:10px;padding-top:10px;border-top:1px solid var(--rim)}
-.tc-btn{font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid var(--rim2);background:transparent;color:var(--t3);font-family:'JetBrains Mono',monospace;transition:all .15s}
+.tc-actions{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--rim)}
+.tc-btn{font-size:10.5px;padding:5px 10px;border-radius:8px;border:1px solid var(--rim2);background:transparent;color:var(--t3);font-family:'JetBrains Mono',monospace;transition:all .15s}
 .tc-btn:hover{background:var(--rim2);color:var(--t1)}
 .tc-btn.done{border-color:rgba(46,219,146,.3);color:var(--grn)}
 .tc-btn.done:hover{background:rgba(46,219,146,.1)}
+@media (max-width:900px){.tgrid{padding:18px 16px 24px}}
+@media (max-width:640px){.tgrid{padding:16px 14px 22px}}
 
 /* ═══════ MEMORY ═══════ */
 #p-mem{background:transparent}
@@ -331,6 +360,15 @@ body.cc #cd{transform:translate(-50%,-50%) scale(.5)}
 .de-msg.em{color:#fca5a5;font-weight:500}
 .de-data{grid-column:1/-1;margin-top:3px;background:rgba(0,0,0,.5);border-radius:5px;padding:7px 9px;color:#94a3b8;white-space:pre-wrap;font-size:9.5px;max-height:240px;overflow-y:auto;border:1px solid var(--rim)}
 .de-data.ed{color:#fca5a5!important;border-color:rgba(240,96,96,.25)!important}
+.ditem{border:1px solid var(--rim);border-radius:10px;background:rgba(13,18,32,.8);overflow:hidden;animation:fadeUp .15s var(--ease) both;backdrop-filter:blur(4px)}
+.ditem summary{display:grid;grid-template-columns:72px 58px 1fr;gap:7px;align-items:center;padding:8px 12px;cursor:pointer;list-style:none}
+.ditem summary::-webkit-details-marker{display:none}
+.ditem.is-error{background:rgba(40,8,8,.75);border-color:rgba(240,96,96,.3)!important}
+.ditem.is-warn{background:rgba(35,26,4,.75);border-color:rgba(245,166,35,.22)!important}
+.dbody{padding:8px 12px;border-top:1px solid var(--rim);display:flex;flex-direction:column;gap:8px}
+.dsection{font-size:9.5px;font-family:'JetBrains Mono',monospace;color:var(--t4);text-transform:uppercase;letter-spacing:.4px}
+.djson{background:rgba(0,0,0,.55);border-radius:6px;padding:8px 10px;color:#94a3b8;white-space:pre-wrap;font-size:9.5px;max-height:260px;overflow-y:auto;border:1px solid var(--rim)}
+.djson.err{color:#fca5a5;border-color:rgba(240,96,96,.25)!important}
 .ntest{padding:11px 14px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--rim2);font-size:11px;animation:fadeUp .2s var(--ease) both}
 .ntest.ok{border-color:rgba(46,219,146,.3)}.ntest.fail{border-color:rgba(240,96,96,.3)}
 .nbanner{padding:9px 16px;border-radius:9px;font-size:11px;font-family:"JetBrains Mono",monospace;border:1px solid;display:flex;align-items:center;gap:8px;margin-bottom:4px;animation:fadeUp .2s var(--ease) both}
@@ -466,7 +504,12 @@ body.focus-mode .topbar{opacity:.15}
           <div class="brand-name">Atlas</div>
         </div>
       </div>
-      <div class="x-notion" title="Local SQLite database" style="opacity:.7;font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--teal);letter-spacing:.3px">◈ LOCAL DB</div>
+      <div class="x-notion" title="Connected data source">
+        <span class="x-sep">×</span>
+        <div class="notion-orb" aria-label="Notion">
+          <span class="notion-letter">N</span>
+        </div>
+      </div>
       <button class="sb-toggle" onclick="toggleSb()" title="Collapse sidebar">‹</button>
     </div>
 
@@ -491,12 +534,14 @@ body.focus-mode .topbar{opacity:.15}
     </div>
     <div class="sb-glow" id="sbglow"></div>
   </aside>
+  <button class="sb-reopen" id="sb-reopen" onclick="toggleSb()" title="Expand sidebar">›</button>
 
   <!-- ═══════ MAIN ═══════ -->
   <main class="main">
     <!-- Topbar -->
     <div class="topbar">
       <span class="topbar-title" id="tb-title">Chat</span>
+      <span class="source-pill" id="source-pill">LOCAL</span>
       <div class="topbar-space"></div>
       <!-- export -->
       <div class="icon-btn glow-btn" title="Export CSV" onclick="exportCSV()">↧</div>
@@ -517,7 +562,7 @@ body.focus-mode .topbar{opacity:.15}
           <div class="welcome" id="wlc">
             <div class="wg" id="wg">Good evening, Joe.</div>
             <div class="flip-wrap"><div class="flip-line" id="fl">What shall we <em>conquer</em> today?</div></div>
-            <p class="ws">Tell me your study goal — I'll build a precise plan, set priorities, estimate effort, and save it to your local task database.</p>
+            <p class="ws">Tell me your study goal — I'll build a precise plan, set priorities, estimate effort, and save it to your task database (Notion or local).</p>
             <div class="chips">
               <div class="chip" onclick="chip('Plan today\'s maths study session')">Plan today's study</div>
               <div class="chip" onclick="chip('Calculus and algebra revision this week')">Weekly revision</div>
@@ -545,7 +590,7 @@ body.focus-mode .topbar{opacity:.15}
 
     <!-- ── TASKS ── -->
     <div class="panel" id="p-tasks">
-      <div class="ph"><span style="font-size:18px;opacity:.6">◈</span><span class="ph-title">Tasks</span><button class="gbtn" onclick="loadTasks()" style="margin-left:auto">↺ Refresh</button>&nbsp;<button class="gbtn" onclick="exportJSON()">↧ JSON</button></div>
+      <div class="ph"><span style="font-size:18px;opacity:.6">◈</span><span class="ph-title">Tasks</span><span class="ph-sub">Drag to reorder</span><button class="gbtn" onclick="loadTasks()" style="margin-left:auto">↺ Refresh</button>&nbsp;<button class="gbtn" onclick="exportJSON()">↧ JSON</button></div>
       <div class="tgrid" id="tg"><div class="empty" style="grid-column:1/-1"><span class="eic">◈</span><p>Loading…</p></div></div>
     </div>
 
@@ -572,7 +617,7 @@ body.focus-mode .topbar{opacity:.15}
       <div class="ph"><span style="font-size:18px;opacity:.6">⬡</span><span class="ph-title">Debug Console</span></div>
       <div class="dtbar">
         <button class="dbtn" onclick="loadDebug()">↺ Refresh</button>
-        <button class="dbtn" onclick="testDB()">◈ Test Local DB</button>
+        <button class="dbtn" onclick="testDB()">◈ Test Source</button>
         <button class="dbtn danger" onclick="clearDebug()">✕ Clear</button>
         <div class="dfilts">
           <button class="dfb a" onclick="dflt('ALL',this)">ALL</button>
@@ -607,6 +652,24 @@ body.focus-mode .topbar{opacity:.15}
               <option value="gemini-2.0-flash">gemini-2.0-flash</option>
             </select>
           </div>
+        </div>
+        <!-- Data source -->
+        <div class="scard">
+          <h3><span>🗂</span> Data Source</h3>
+          <div class="srow">
+            <div class="slabel">DATA SOURCE</div>
+            <select class="sselect" id="s-source">
+              <option value="local">local (fast)</option>
+              <option value="notion">notion (cloud)</option>
+            </select>
+          </div>
+        </div>
+        <!-- Notion -->
+        <div class="scard">
+          <h3><span>🧩</span> Notion</h3>
+          <div class="srow"><div class="slabel">NOTION TOKEN</div><input class="sinput" id="s-notion-token" type="password" placeholder="secret_notion_integration_token"></div>
+          <div class="srow"><div class="slabel">DATABASE ID</div><input class="sinput" id="s-notion-db" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></div>
+          <div class="srow"><div class="slabel">STUDY LOG PAGE ID</div><input class="sinput" id="s-notion-log" type="text" placeholder="optional"></div>
         </div>
         <!-- Local DB info -->
         <div class="scard">
@@ -820,6 +883,8 @@ function toggleSb(){
   sbCollapsed=!sbCollapsed;
   const sb=document.getElementById('sb');
   sb.classList.toggle('collapsed',sbCollapsed);
+  const reopen=document.getElementById('sb-reopen');
+  if(reopen) reopen.style.display=sbCollapsed?'flex':'none';
   // Update ALL toggle buttons (there may be more than one)
   document.querySelectorAll('.sb-toggle').forEach(btn=>{
     btn.textContent=sbCollapsed?'›':'‹';
@@ -932,7 +997,7 @@ function newChat(){
     w.className='welcome';w.id='wlc';
     w.innerHTML=`<div class="wg" id="wg2">${document.getElementById('wg').textContent}</div>
       <div class="flip-wrap"><div class="flip-line" id="fl2">${PHRASES[flipIdx]}</div></div>
-      <p class="ws">Tell me your study goal — I'll build a precise plan and push it to Notion.</p>
+      <p class="ws">Tell me your study goal — I'll build a precise plan and push it to your task database.</p>
       <div class="chips">
         <div class="chip" onclick="chip('Plan today\\'s maths study session')">Plan today's study</div>
         <div class="chip" onclick="chip('/progress')">A* progress</div>
@@ -1014,7 +1079,7 @@ function sendMsg(){
           setS('Ready','ok');silentTC();
           // check for task completions
           const dones=log.filter(l=>l.includes('create_task')&&l.includes('✓')).length;
-          if(dones)toast(`${dones} task${dones>1?'s':''} added to Notion`,'success');
+          if(dones)toast(`${dones} task${dones>1?'s':''} added to your task list`,'success');
         }
       }
     }
@@ -1028,6 +1093,7 @@ function sendMsg(){
 /* ═══════════════════════════════════════════════════════
    TASKS
 ═══════════════════════════════════════════════════════ */
+let LAST_TASK_IDS=[];
 async function loadTasks(){
   const g=document.getElementById('tg');
   g.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="eic">◈</span><p>Loading…</p></div>';
@@ -1035,6 +1101,10 @@ async function loadTasks(){
     const ts=await fetch('/api/tasks').then(r=>r.json());
     updateBadge(ts.length);
     if(!ts.length){g.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="eic">◈</span><p>No tasks yet.</p></div>';return}
+    ts.sort((a,b)=>(a.position||0)-(b.position||0));
+    const prev=new Set(LAST_TASK_IDS);
+    const newIds=ts.filter(t=>!prev.has(t.id)).map(t=>t.id);
+    LAST_TASK_IDS=ts.map(t=>t.id);
     g.innerHTML='';
     ts.forEach((t,i)=>{
       const pr=(t.priority||'').toLowerCase();
@@ -1044,15 +1114,20 @@ async function loadTasks(){
       const si={'Done':'✅','In progress':'🔵','Planned':'🟣'}[t.status]||'⬜';
       const due=t.due?fmtDue(t.due):'';
       const card=document.createElement('div');
-      card.className=`tcard ${pc}`;card.style.animationDelay=(i*.032)+'s';
+      card.className=`tcard ${pc}`;
+      if(newIds.includes(t.id)) card.classList.add('new');
+      card.style.animationDelay=(i*.02)+'s';
+      card.dataset.id=t.id;
+      card.draggable=true;
       card.innerHTML=`
-        <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">
-          <span style="font-size:14px;flex-shrink:0;margin-top:1px">${si}</span>
+        <div class="tc-head">
+          <span class="tc-ic">${si}</span>
           <div class="tc-title">${esc(t.title)}</div>
+          <span class="tc-handle">⋮⋮</span>
         </div>
         ${t.summary?`<div class="tc-sum">${esc(t.summary)}</div>`:''}
         <div class="tc-tags">
-          <span class="tag ${sc}">${t.status||'Not started'}</span>
+          <span class="tag status-tag ${sc}">${t.status||'Not started'}</span>
           ${t.priority?`<span class="tag ${pct}">${t.priority}</span>`:''}
           ${t.effort?`<span class="tag tef">${t.effort}</span>`:''}
           ${due?`<span class="tag tdu">📅 ${due}</span>`:''}
@@ -1063,23 +1138,42 @@ async function loadTasks(){
           <button class="tc-btn" style="margin-left:auto;border-color:rgba(240,96,96,.3);color:var(--red)" onclick="deleteTask('${t.id}',this)">🗑</button>
         </div>`;
       g.appendChild(card);
-    });bh();
+    });
+    enableDnD(g);
+    if(newIds.length && prev.size){
+      const first=g.querySelector(`[data-id="${newIds[0]}"]`);
+      if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    bh();
   }catch{g.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="eic">⚠</span><p>Could not load tasks.</p></div>'}
 }
+function updateCardStatus(card,status){
+  if(!card) return;
+  const sc={'Done':'td','In progress':'tp','Planned':'tpl'}[status]||'tn';
+  const si={'Done':'✅','In progress':'🔵','Planned':'🟣'}[status]||'⬜';
+  const tag=card.querySelector('.status-tag');
+  if(tag){tag.className=`tag status-tag ${sc}`;tag.textContent=status||'Not started'}
+  const ic=card.querySelector('.tc-ic');
+  if(ic) ic.textContent=si;
+  card.classList.add('updated');
+  setTimeout(()=>card.classList.remove('updated'),700);
+}
 async function markDone(id,btn){
+  const card=btn.closest('.tcard');
   btn.disabled=true;btn.textContent='…';
   const ok=await fetch(`/api/tasks/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'Done'})}).then(r=>r.json()).then(r=>r.ok).catch(()=>false);
-  if(ok){btn.textContent='✓ Done!';btn.style.color='var(--grn)';toast('Task marked done','success')}
+  if(ok){btn.textContent='✓ Done!';btn.style.color='var(--grn)';updateCardStatus(card,'Done');toast('Task marked done','success')}
   else{btn.textContent='✗ Error';btn.disabled=false}
 }
 async function markInProg(id,btn){
+  const card=btn.closest('.tcard');
   btn.disabled=true;btn.textContent='…';
   const ok=await fetch(`/api/tasks/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'In progress'})}).then(r=>r.json()).then(r=>r.ok).catch(()=>false);
-  if(ok){btn.textContent='▷ In Progress!';toast('Task updated','info')}
+  if(ok){btn.textContent='▷ In Progress';updateCardStatus(card,'In progress');toast('Task updated','info')}
   else{btn.textContent='✗ Error';btn.disabled=false}
 }
 async function deleteTask(id,btn){
-  if(!confirm('Delete this task from Notion?'))return;
+  if(!confirm('Delete this task?'))return;
   btn.disabled=true;btn.textContent='…';
   const ok=await fetch(`/api/tasks/${id}/delete`,{method:'DELETE'}).then(r=>r.json()).then(r=>r.ok).catch(()=>false);
   if(ok){btn.closest('.tcard').style.opacity='0';btn.closest('.tcard').style.transform='scale(.95)';setTimeout(()=>{btn.closest('.tcard').remove();silentTC()},300);toast('Task deleted','success')}
@@ -1088,6 +1182,43 @@ async function deleteTask(id,btn){
 async function silentTC(){try{const t=await fetch('/api/tasks').then(r=>r.json());updateBadge(t.length)}catch{}}
 function updateBadge(n){const b=document.getElementById('tc');if(b)b.textContent=n||'—'}
 function fmtDue(iso){try{const d=new Date(iso);return d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:true})}catch{return iso}}
+
+function enableDnD(container){
+  if(container.dataset.dnd) return;
+  container.dataset.dnd='1';
+  container.addEventListener('dragstart',e=>{
+    const card=e.target.closest('.tcard');if(!card)return;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';
+  });
+  container.addEventListener('dragover',e=>{
+    e.preventDefault();
+    const dragging=container.querySelector('.dragging');
+    if(!dragging) return;
+    const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.tcard');
+    if(target && target!==dragging){
+      container.insertBefore(dragging,target);
+    }
+  });
+  container.addEventListener('drop',e=>{
+    e.preventDefault();
+    const dragging=container.querySelector('.dragging');
+    if(dragging) dragging.classList.remove('dragging');
+    persistOrder(container);
+  });
+  container.addEventListener('dragend',()=>{
+    const dragging=container.querySelector('.dragging');
+    if(dragging) dragging.classList.remove('dragging');
+  });
+}
+
+async function persistOrder(container){
+  const tasks=[...container.querySelectorAll('.tcard')].map((c,i)=>({id:c.dataset.id,position:i+1}));
+  if(!tasks.length) return;
+  const res=await fetch('/api/tasks/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tasks})}).then(r=>r.json()).catch(()=>null);
+  if(res?.ok){toast('Order saved','success')}
+  else{toast('Reorder not supported','warning')}
+}
 function exportJSON(){window.open('/api/export/json','_blank')}
 function exportCSV(){window.open('/api/export/csv','_blank')}
 
@@ -1208,23 +1339,36 @@ async function loadDebug(){
     entries.forEach((e,i)=>{
       const isErr=(e.level==='ERROR');
       const isWarn=(e.level==='WARN');
-      const row=document.createElement('div');
-      row.className='de'+(isErr?' is-error':isWarn?' is-warn':'');
-      row.style.animationDelay=(i*.008)+'s';
+      const det=document.createElement('details');
+      det.className='ditem'+(isErr?' is-error':isWarn?' is-warn':'');
+      det.style.animationDelay=(i*.008)+'s';
+      if(isErr) det.open=true;
 
-      let dhtml='';
-      if(e.data&&typeof e.data==='object'&&Object.keys(e.data).length){
-        const dataStr=JSON.stringify(e.data,null,2);
-        dhtml=`<div class="de-data${isErr?' ed':''}">${esc(dataStr)}</div>`;
-      }
-
+      const summary=document.createElement('summary');
       const msgClass=isErr?'de-msg em':'de-msg';
-      row.innerHTML=
+      summary.innerHTML=
         `<div class="de-ts">${(e.ts||'').slice(11,19)}</div>`
         +`<div class="de-lv ${e.level||'INFO'}">${e.level||'INFO'}</div>`
-        +`<div class="${msgClass}">${esc(e.source||'')} — ${esc(e.msg||'')}</div>`
-        +dhtml;
-      dl.appendChild(row);
+        +`<div class="${msgClass}">${esc(e.source||'')} — ${esc(e.msg||'')}</div>`;
+
+      const body=document.createElement('div');
+      body.className='dbody';
+      if(e.data&&typeof e.data==='object'&&Object.keys(e.data).length){
+        const req=e.data.request?JSON.stringify(e.data.request,null,2):'';
+        const res=e.data.response?JSON.stringify(e.data.response,null,2):'';
+        if(req){body.innerHTML+=`<div class="dsection">Request</div><div class="djson">${esc(req)}</div>`;}
+        if(res){body.innerHTML+=`<div class="dsection">Response</div><div class="djson${isErr?' err':''}">${esc(res)}</div>`;}
+        const extras=Object.assign({},e.data);delete extras.request;delete extras.response;
+        if(Object.keys(extras).length){
+          body.innerHTML+=`<div class="dsection">Details</div><div class="djson">${esc(JSON.stringify(extras,null,2))}</div>`;
+        }
+      }else{
+        body.innerHTML='<div class="dsection">Details</div><div class="djson">No additional data.</div>';
+      }
+
+      det.appendChild(summary);
+      det.appendChild(body);
+      dl.appendChild(det);
     });
   }catch(err){dl.innerHTML=`<div class="empty"><span class="eic">⬡</span><p>Could not load: ${esc(String(err))}</p></div>`}
 }
@@ -1233,20 +1377,23 @@ async function clearDebug(){await fetch('/api/debug/clear',{method:'POST'});load
 
 async function testDB(){
   const dl=document.getElementById('dl');
-  const loading=document.createElement('div');loading.className='nbanner warn';loading.textContent='Testing local database…';
+  const loading=document.createElement('div');loading.className='nbanner warn';loading.textContent='Testing data source…';
   dl.prepend(loading);
   try{
-    const r=await fetch('/api/db/test',{method:'POST'}).then(r=>r.json());
+    const st=await fetch('/api/status').then(r=>r.json()).catch(()=>({}));
+    const endpoint=(st.data_source==='notion')?'/api/notion/test':'/api/db/test';
+    const r=await fetch(endpoint,{method:'POST'}).then(r=>r.json());
     loading.remove();
     const el=document.createElement('div');
     el.className=`nbanner ${r.ok?'ok':'fail'}`;
     if(r.ok){
-      el.innerHTML=`✓ Local DB connected — ${r.task_count} task${r.task_count!==1?'s':''} · ${Object.keys(r.schema||{}).length} columns · ${esc(r.db_path||'atlas_tasks.db')}`;
+      const src=(st.data_source||'local').toUpperCase();
+      el.innerHTML=`✓ ${src} source connected — ${Object.keys(r.schema||{}).length} columns`;
     }else{
-      el.innerHTML=`✗ DB FAILED — ${esc(r.error||'unknown error')}`;
+      el.innerHTML=`✗ SOURCE FAILED — ${esc(r.error||'unknown error')}`;
     }
     dl.prepend(el);
-    toast(r.ok?'DB connected':'DB failed',r.ok?'success':'error');
+    toast(r.ok?'Source connected':'Source failed',r.ok?'success':'error');
   }catch(e){
     loading.remove();
     const el=document.createElement('div');el.className='nbanner fail';
@@ -1266,6 +1413,15 @@ async function loadSettings(){
     document.getElementById('s-gem').value=cfg.gemini_api_key||'';
     document.getElementById('s-model').value=cfg.model_name||'gemini-1.5-flash';
     document.getElementById('s-pers').value=cfg.personality||'';
+    const dsSel=document.getElementById('s-source');
+    if(dsSel) dsSel.value=cfg.data_source||'local';
+    const active=(cfg.study_lists||[])[cfg.active_index||0]||{};
+    const nt=document.getElementById('s-notion-token');
+    const nd=document.getElementById('s-notion-db');
+    const nl=document.getElementById('s-notion-log');
+    if(nt) nt.value=cfg.notion_token||'';
+    if(nd) nd.value=active.database_id||'';
+    if(nl) nl.value=active.study_log_page_id||'';
     // DB info
     const s=await fetch('/api/status').then(r=>r.json());
     const pathEl=document.getElementById('s-db-path');
@@ -1283,6 +1439,14 @@ async function saveSettings(){
       gemini_api_key:document.getElementById('s-gem').value,
       model_name:    document.getElementById('s-model').value,
       personality:   document.getElementById('s-pers').value,
+      data_source:   document.getElementById('s-source')?.value||'local',
+      notion_token:  document.getElementById('s-notion-token')?.value||'',
+      study_lists:   [{
+        name:'Main',
+        database_id:document.getElementById('s-notion-db')?.value||'',
+        study_log_page_id:document.getElementById('s-notion-log')?.value||'',
+      }],
+      active_index:  0,
     };
     const ok=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).then(r=>r.ok);
     res.textContent=ok?'✓ Saved & reconnected':'✗ Save failed';
@@ -1305,6 +1469,16 @@ async function init(){
       toast('Local database unavailable — check backend/','warning');
     } else {
       setS(`${s.model} · ${s.task_count} tasks`,'ok');
+    }
+    const sp=document.getElementById('source-pill');
+    if(sp){
+      const src=(s.effective_source||s.data_source||'local').toUpperCase();
+      sp.textContent=src;
+      sp.style.color=src==='NOTION'?'#111': 'var(--teal)';
+      sp.style.background=src==='NOTION'?'#fff':'transparent';
+    }
+    if((s.data_source||'')==='notion' && !s.notion_ready){
+      toast(`Notion not ready: ${s.notion_last_error||'check schema names'}`,'warning');
     }
     silentTC();
     loadNotifs();

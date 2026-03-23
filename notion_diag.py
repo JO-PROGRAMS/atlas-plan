@@ -26,7 +26,7 @@ print()
 
 headers = {
     "Authorization": f"Bearer {token}",
-    "Notion-Version": "2022-06-28",
+    "Notion-Version": "2025-09-03",
     "Content-Type": "application/json",
 }
 
@@ -39,7 +39,16 @@ print(f"Status: {r.status_code}")
 if r.ok:
     d = r.json()
     title = (d.get("title") or [{}])[0].get("plain_text","?")
-    props = list(d.get("properties",{}).keys())
+    data_sources = d.get("data_sources") or []
+    if data_sources:
+        ds_id = data_sources[0].get("id")
+        rds = requests.get(f"{BASE}/data_sources/{ds_id}", headers=headers, timeout=10)
+        if rds.ok:
+            props = list(rds.json().get("properties",{}).keys())
+        else:
+            props = []
+    else:
+        props = list(d.get("properties",{}).keys())
     print(f"✓ DB title: '{title}'")
     print(f"✓ Columns: {props}")
 else:
@@ -48,14 +57,24 @@ else:
 
 # ── Test 2: query DB ──────────────────────────────────────────────────────
 print("\n── Test 2: Query DB ──────────────────────────")
-r2 = requests.post(f"{BASE}/databases/{db_id}/query", headers=headers, json={"page_size":3}, timeout=10)
+query_path = f"{BASE}/databases/{db_id}/query"
+if r.ok and (d.get("data_sources") or []):
+    ds_id = (d.get("data_sources") or [{}])[0].get("id")
+    if ds_id:
+        query_path = f"{BASE}/data_sources/{ds_id}/query"
+r2 = requests.post(query_path, headers=headers, json={"page_size":3}, timeout=10)
 print(f"Status: {r2.status_code}")
 if r2.ok:
     pages = r2.json().get("results",[])
     print(f"✓ Rows returned: {len(pages)}")
     for p in pages[:2]:
         props = p.get("properties",{})
-        title_items = props.get("Task name",{}).get("title",[])
+        title_prop = None
+        for k,v in props.items():
+            if isinstance(v, dict) and v.get("type") == "title":
+                title_prop = v
+                break
+        title_items = (title_prop or {}).get("title",[])
         title_text = title_items[0].get("plain_text","?") if title_items else "?"
         print(f"  - '{title_text}'")
 else:
@@ -63,10 +82,35 @@ else:
 
 # ── Test 3: create a test task ────────────────────────────────────────────
 print("\n── Test 3: CREATE a test page ────────────────")
+parent = {"type": "database_id", "database_id": db_id}
+if r.ok and (d.get("data_sources") or []):
+    ds_id = (d.get("data_sources") or [{}])[0].get("id")
+    if ds_id:
+        parent = {"type": "data_source_id", "data_source_id": ds_id}
+title_name = None
+if r.ok:
+    ds_props = {}
+    if (d.get("data_sources") or []):
+        ds_id = (d.get("data_sources") or [{}])[0].get("id")
+        if ds_id:
+            rds = requests.get(f"{BASE}/data_sources/{ds_id}", headers=headers, timeout=10)
+            if rds.ok:
+                ds_props = rds.json().get("properties", {}) or {}
+    else:
+        ds_props = d.get("properties", {}) or {}
+    for k,v in ds_props.items():
+        if isinstance(v, dict) and v.get("type") == "title":
+            title_name = k
+            break
+if not title_name:
+    title_name = "Task name"
+if title_name != "Task Name":
+    print(f"⚠ Title property is '{title_name}'. Atlas requires 'Task Name' exactly.")
+
 payload = {
-    "parent": {"database_id": db_id},
+    "parent": parent,
     "properties": {
-        "Task name": {"title": [{"text": {"content": "🧪 DIAGNOSTIC TEST TASK — delete me"}}]},
+        title_name: {"title": [{"text": {"content": "🧪 DIAGNOSTIC TEST TASK — delete me"}}]},
         "Status": {"status": {"name": "Not started"}},
         "Priority": {"select": {"name": "Low"}},
     }

@@ -38,6 +38,17 @@ REQUIRED_PROPERTIES: Dict[str, str] = {
     "Summary": "rich_text",
 }
 
+# Alternate label candidates (case/spacing variations) mapped to logical keys
+PROPERTY_CANDIDATES: Dict[str, List[str]] = {
+    "Task Name": ["Task Name", "Task name", "Name", "Title"],
+    "Status": ["Status"],
+    "Due date": ["Due date", "Due Date", "Due"],
+    "Priority": ["Priority"],
+    "Updated at": ["Updated at", "Last updated", "Last Edited"],
+    "Effort level": ["Effort level", "Effort Level", "Effort"],
+    "Summary": ["Summary", "Notes", "Description"],
+}
+
 
 class NotionClient:
     """Notion client with schema validation and strict payload checks."""
@@ -68,6 +79,8 @@ class NotionClient:
         self.allowed_statuses: List[str] = []
         self.allowed_priorities: List[str] = []
         self.allowed_efforts: List[str] = []
+        self.prop_names: Dict[str, str] = {}
+        self.last_error: Optional[str] = None
 
         if self.enabled:
             self.refresh_schema()
@@ -136,6 +149,7 @@ class NotionClient:
             self.enabled = False
             self.write_enabled = False
             self.list_type = "unknown"
+            self.last_error = f"Schema fetch failed (HTTP {status})"
             return False
 
         # New API: database contains data_sources array
@@ -146,6 +160,7 @@ class NotionClient:
                 self._log("ERROR", "schema", "data_sources present but id missing", {"data_sources": data_sources})
                 self.enabled = False
                 self.write_enabled = False
+                self.last_error = "Schema fetch failed (missing data_source_id)"
                 return False
             ok2, ds, status2 = self._request("GET", f"/data_sources/{self.data_source_id}")
             self._log_request(
@@ -160,6 +175,7 @@ class NotionClient:
             if not ok2:
                 self.enabled = False
                 self.write_enabled = False
+                self.last_error = f"Data source fetch failed (HTTP {status2})"
                 return False
             self.db_properties = ds.get("properties", {}) or {}
         else:
@@ -170,20 +186,34 @@ class NotionClient:
     def _validate_schema(self) -> bool:
         errors: List[str] = []
         props = self.db_properties or {}
-        for name, expected_type in REQUIRED_PROPERTIES.items():
-            prop = props.get(name)
-            if not prop:
-                errors.append(f"Missing property '{name}'")
+        self.prop_names = self._resolve_property_names(props)
+        for logical, expected_type in REQUIRED_PROPERTIES.items():
+            actual = self.prop_names.get(logical)
+            if not actual:
+                errors.append(f"Missing property '{logical}'")
                 continue
+            prop = props.get(actual) or {}
             if prop.get("type") != expected_type:
                 errors.append(
-                    f"Property '{name}' type mismatch (expected {expected_type}, got {prop.get('type')})"
+                    f"Property '{actual}' type mismatch (expected {expected_type}, got {prop.get('type')})"
+                )
+            # Enforce exact name match (case-sensitive)
+            if actual != logical:
+                errors.append(
+                    f"Property name mismatch: expected '{logical}', found '{actual}'. Rename in Notion to match."
                 )
 
         # Validate options for status/select types
-        self.allowed_statuses = self._extract_options(props, "Status", "status")
-        self.allowed_priorities = self._extract_options(props, "Priority", "select")
-        self.allowed_efforts = self._extract_options(props, "Effort level", "select")
+        self.allowed_statuses = self._extract_options(props, self.prop_names.get("Status", "Status"), "status")
+        self.allowed_priorities = self._extract_options(props, self.prop_names.get("Priority", "Priority"), "select")
+        self.allowed_efforts = self._extract_options(props, self.prop_names.get("Effort level", "Effort level"), "select")
+
+        if self.prop_names.get("Status") and not self.allowed_statuses:
+            errors.append("Status options could not be read from schema")
+        if self.prop_names.get("Priority") and not self.allowed_priorities:
+            errors.append("Priority options could not be read from schema")
+        if self.prop_names.get("Effort level") and not self.allowed_efforts:
+            errors.append("Effort level options could not be read from schema")
 
         if self.allowed_statuses and not VALID_STATUSES.issubset(set(self.allowed_statuses)):
             errors.append(f"Status options missing required values: {sorted(VALID_STATUSES)}")
@@ -197,6 +227,7 @@ class NotionClient:
             self.schema_ok = False
             self.list_type = "unknown"
             self.write_enabled = False
+            self.last_error = "Schema validation failed: " + "; ".join(errors[:5])
             return False
 
         self.schema_ok = True
@@ -204,7 +235,11 @@ class NotionClient:
         return True
 
     def schema_summary(self) -> Dict[str, str]:
-        return dict(REQUIRED_PROPERTIES)
+        if not self.prop_names:
+            return dict(REQUIRED_PROPERTIES)
+        return {
+            self.prop_names.get(k, k): v for k, v in REQUIRED_PROPERTIES.items()
+        }
 
     @staticmethod
     def _extract_options(props: Dict[str, Any], name: str, prop_type: str) -> List[str]:
@@ -214,6 +249,25 @@ class NotionClient:
         cfg = prop.get(prop_type) or {}
         opts = cfg.get("options") or []
         return [o.get("name") for o in opts if o.get("name")]
+
+    @staticmethod
+    def _resolve_property_names(props: Dict[str, Any]) -> Dict[str, str]:
+        resolved: Dict[str, str] = {}
+        keys = list(props.keys())
+        lower_map = {k.lower(): k for k in keys}
+        for logical, candidates in PROPERTY_CANDIDATES.items():
+            found = None
+            for cand in candidates:
+                if cand in props:
+                    found = cand
+                    break
+                lc = cand.lower()
+                if lc in lower_map:
+                    found = lower_map[lc]
+                    break
+            if found:
+                resolved[logical] = found
+        return resolved
 
     # ── Payload helpers ───────────────────────────────────────────────────
 
@@ -273,20 +327,28 @@ class NotionClient:
             self._log("ERROR", "create_task", "Validation failed", {"errors": errs})
             return None
 
+        tn = self.prop_names.get("Task Name", "Task Name")
+        st = self.prop_names.get("Status", "Status")
+        pr = self.prop_names.get("Priority", "Priority")
+        du = self.prop_names.get("Due date", "Due date")
+        up = self.prop_names.get("Updated at", "Updated at")
+        ef = self.prop_names.get("Effort level", "Effort level")
+        sm = self.prop_names.get("Summary", "Summary")
+
         props: Dict[str, Any] = {
-            "Task Name": {"title": [{"text": {"content": str(title)}}]},
-            "Status": {"status": {"name": status}},
-            "Priority": {"select": {"name": priority}},
-            "Updated at": {"date": {"start": self._now_iso()}},
+            tn: {"title": [{"text": {"content": str(title)}}]},
+            st: {"status": {"name": status}},
+            pr: {"select": {"name": priority}},
+            up: {"date": {"start": self._now_iso()}},
         }
         if due:
-            props["Due date"] = {"date": {"start": due}}
+            props[du] = {"date": {"start": due}}
         if effort:
-            props["Effort level"] = {"select": {"name": effort}}
+            props[ef] = {"select": {"name": effort}}
         if summary:
-            props["Summary"] = {"rich_text": [{"text": {"content": str(summary)}}]}
+            props[sm] = {"rich_text": [{"text": {"content": str(summary)}}]}
         else:
-            props["Summary"] = {"rich_text": []}
+            props[sm] = {"rich_text": []}
 
         parent: Dict[str, Any]
         if self.data_source_id:
@@ -298,8 +360,34 @@ class NotionClient:
         ok, resp, status_code = self._request("POST", "/pages", payload)
         self._log_request("create_task", "POST", "/pages", payload, ok, status_code, resp)
         if not ok:
+            self.last_error = f"Create failed (HTTP {status_code})"
             return None
-        return resp.get("id")
+        page_id = resp.get("id")
+        if not page_id:
+            self.last_error = "Create succeeded but no page id returned"
+            return None
+
+        # Re-fetch created page to confirm persistence
+        ok2, page, status2 = self._request("GET", f"/pages/{page_id}")
+        self._log_request("create_task_confirm", "GET", f"/pages/{page_id}", None, ok2, status2, page)
+        if not ok2:
+            self.last_error = f"Create confirmation failed (HTTP {status2})"
+            return None
+
+        # Confirm parent matches database/data source
+        parent = (page or {}).get("parent") or {}
+        if self.data_source_id:
+            if parent.get("data_source_id") != self.data_source_id:
+                self._log("ERROR", "create_task_confirm", "Parent data_source_id mismatch", {"parent": parent})
+                self.last_error = "Parent data_source_id mismatch"
+                return None
+        else:
+            if parent.get("database_id") != self.database_id:
+                self._log("ERROR", "create_task_confirm", "Parent database_id mismatch", {"parent": parent})
+                self.last_error = "Parent database_id mismatch"
+                return None
+
+        return page_id
 
     def update_task_status(self, task_id: str, status: str) -> bool:
         if not (self.enabled and self.schema_ok and self.write_enabled):
@@ -310,13 +398,17 @@ class NotionClient:
             self._log("ERROR", "update_status", "Validation failed", {"errors": errs})
             return False
 
+        st = self.prop_names.get("Status", "Status")
+        up = self.prop_names.get("Updated at", "Updated at")
         props = {
-            "Status": {"status": {"name": status}},
-            "Updated at": {"date": {"start": self._now_iso()}},
+            st: {"status": {"name": status}},
+            up: {"date": {"start": self._now_iso()}},
         }
         payload = {"properties": props}
         ok, resp, status_code = self._request("PATCH", f"/pages/{task_id}", payload)
         self._log_request("update_status", "PATCH", f"/pages/{task_id}", payload, ok, status_code, resp)
+        if not ok:
+            self.last_error = f"Status update failed (HTTP {status_code})"
         return ok
 
     def update_task_properties(self, task_id: str, props: Dict[str, Any]) -> bool:
@@ -337,26 +429,39 @@ class NotionClient:
             self._log("ERROR", "update_props", "Validation failed", {"errors": errs})
             return False
 
-        out: Dict[str, Any] = {"Updated at": {"date": {"start": self._now_iso()}}}
+        tn = self.prop_names.get("Task Name", "Task Name")
+        st = self.prop_names.get("Status", "Status")
+        pr = self.prop_names.get("Priority", "Priority")
+        du = self.prop_names.get("Due date", "Due date")
+        up = self.prop_names.get("Updated at", "Updated at")
+        ef = self.prop_names.get("Effort level", "Effort level")
+        sm = self.prop_names.get("Summary", "Summary")
+
+        out: Dict[str, Any] = {up: {"date": {"start": self._now_iso()}}}
         if title is not None:
-            out["Task Name"] = {"title": [{"text": {"content": str(title)}}]}
+            out[tn] = {"title": [{"text": {"content": str(title)}}]}
         if status is not None:
-            out["Status"] = {"status": {"name": status} if status else None}
+            out[st] = {"status": {"name": status} if status else None}
         if priority is not None:
-            out["Priority"] = {"select": {"name": priority} if priority else None}
+            out[pr] = {"select": {"name": priority} if priority else None}
         if effort is not None:
-            out["Effort level"] = {"select": {"name": effort} if effort else None}
+            out[ef] = {"select": {"name": effort} if effort else None}
         if summary is not None:
-            out["Summary"] = {
+            out[sm] = {
                 "rich_text": [{"text": {"content": str(summary)}}] if summary else []
             }
         if due_raw is not None:
-            out["Due date"] = {"date": {"start": due} if due else None}
+            out[du] = {"date": {"start": due} if due else None}
 
         payload = {"properties": out}
         ok, resp, status_code = self._request("PATCH", f"/pages/{task_id}", payload)
         self._log_request("update_props", "PATCH", f"/pages/{task_id}", payload, ok, status_code, resp)
+        if not ok:
+            self.last_error = f"Update failed (HTTP {status_code})"
         return ok
+
+    def update_task(self, task_id: str, props: Dict[str, Any]) -> bool:
+        return self.update_task_properties(task_id, props)
 
     def delete_task(self, task_id: str) -> bool:
         if not (self.enabled and self.write_enabled):
@@ -365,6 +470,8 @@ class NotionClient:
         payload = {"archived": True}
         ok, resp, status_code = self._request("PATCH", f"/pages/{task_id}", payload)
         self._log_request("delete_task", "PATCH", f"/pages/{task_id}", payload, ok, status_code, resp)
+        if not ok:
+            self.last_error = f"Delete failed (HTTP {status_code})"
         return ok
 
     def fetch_all_tasks(self) -> Optional[List[Dict[str, Any]]]:
@@ -403,6 +510,9 @@ class NotionClient:
         for i, t in enumerate(results):
             t["position"] = i + 1
         return results
+
+    def fetch_tasks(self) -> Optional[List[Dict[str, Any]]]:
+        return self.fetch_all_tasks()
 
     def fetch_tasks_by_status(self, status: str) -> Optional[List[Dict[str, Any]]]:
         tasks = self.fetch_all_tasks()
@@ -453,6 +563,8 @@ class NotionClient:
         if prop_type in {"status", "title"}:
             self._log("ERROR", "add_column", f"Property type not supported: {prop_type}")
             return False
+        # Map logical name to actual if present
+        actual_name = self.prop_names.get(name, name)
 
         schema: Dict[str, Any] = {"type": prop_type, prop_type: {}}
         if prop_type == "select":
@@ -462,7 +574,7 @@ class NotionClient:
         elif prop_type == "rich_text":
             schema[prop_type] = {}
 
-        payload = {"properties": {name: schema}}
+        payload = {"properties": {actual_name: schema}}
         path = f"/data_sources/{self.data_source_id}" if self.data_source_id else f"/databases/{self.database_id}"
         ok, resp, status_code = self._request("PATCH", path, payload)
         self._log_request("add_column", "PATCH", path, payload, ok, status_code, resp)
@@ -473,7 +585,8 @@ class NotionClient:
     def delete_column(self, name: str) -> bool:
         if not (self.enabled and self.write_enabled):
             return False
-        payload = {"properties": {name: None}}
+        actual_name = self.prop_names.get(name, name)
+        payload = {"properties": {actual_name: None}}
         path = f"/data_sources/{self.data_source_id}" if self.data_source_id else f"/databases/{self.database_id}"
         ok, resp, status_code = self._request("PATCH", path, payload)
         self._log_request("delete_column", "PATCH", path, payload, ok, status_code, resp)
@@ -495,13 +608,21 @@ class NotionClient:
 
     def _page_to_task_dict(self, page: Dict[str, Any]) -> Dict[str, Any]:
         props = page.get("properties", {}) or {}
-        title_prop = props.get("Task Name", {})
-        status_prop = props.get("Status", {})
-        priority_prop = props.get("Priority", {})
-        effort_prop = props.get("Effort level", {})
-        summary_prop = props.get("Summary", {})
-        due_prop = props.get("Due date", {})
-        updated_prop = props.get("Updated at", {})
+        tn = self.prop_names.get("Task Name", "Task Name")
+        st = self.prop_names.get("Status", "Status")
+        pr = self.prop_names.get("Priority", "Priority")
+        ef = self.prop_names.get("Effort level", "Effort level")
+        sm = self.prop_names.get("Summary", "Summary")
+        du = self.prop_names.get("Due date", "Due date")
+        up = self.prop_names.get("Updated at", "Updated at")
+
+        title_prop = props.get(tn, {})
+        status_prop = props.get(st, {})
+        priority_prop = props.get(pr, {})
+        effort_prop = props.get(ef, {})
+        summary_prop = props.get(sm, {})
+        due_prop = props.get(du, {})
+        updated_prop = props.get(up, {})
 
         title = self._plain_text(title_prop.get("title", []) or [])
         status = (status_prop.get("status") or {}).get("name", "")

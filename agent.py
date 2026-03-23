@@ -35,6 +35,7 @@ from collections import defaultdict
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, date, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
 def local_now() -> datetime:
     """Return current local time (timezone-aware if possible, else naive)."""
     try:
@@ -70,6 +71,14 @@ import requests
 from backend.local_db import LocalDBClient
 from backend.notion_client import NotionClient
 from backend.task_service import TaskService
+
+try:
+    from dotenv import load_dotenv
+except Exception:
+    load_dotenv = None
+
+if load_dotenv:
+    load_dotenv()
 
 try:
     from google import genai
@@ -123,7 +132,6 @@ DEFAULT_PERSONALITY = textwrap.dedent("""
     - Reference past performance patterns to make smarter plans.
     - Your goal is to get this student an A* in maths.
 """).strip()
-
 
 # =============================================================================
 # DATA CLASSES
@@ -198,6 +206,7 @@ class AppConfig:
     model_name: str         = "gemini-1.5-flash"
     personality: str        = field(default_factory=lambda: DEFAULT_PERSONALITY)
     notion_token: str       = ""
+    data_source: str        = "local"
     study_lists: List[StudyListConfig] = field(
         default_factory=lambda: [StudyListConfig()]
     )
@@ -209,6 +218,7 @@ class AppConfig:
             "model_name": self.model_name,
             "personality": self.personality,
             "notion_token": self.notion_token,
+            "data_source": self.data_source,
             "study_lists": [asdict(s) for s in self.study_lists],
             "active_study_list_index": self.active_study_list_index,
         }
@@ -223,11 +233,15 @@ class AppConfig:
             )
             for x in (d.get("study_lists") or [])
         ] or [StudyListConfig()]
+        ds = (d.get("data_source") or "local").lower()
+        if ds not in {"local", "notion"}:
+            ds = "local"
         return cls(
             gemini_api_key=d.get("gemini_api_key", ""),
             model_name=d.get("model_name", "gemini-1.5-flash"),
             personality=d.get("personality") or DEFAULT_PERSONALITY,
             notion_token=d.get("notion_token", ""),
+            data_source=ds,
             study_lists=lists,
             active_study_list_index=int(d.get("active_study_list_index", 0)),
         )
@@ -245,14 +259,38 @@ class ConfigManager:
     def _load(self) -> AppConfig:
         if not os.path.exists(self.path):
             cfg = AppConfig()
+            self._apply_env_overrides(cfg)
             self.save(cfg)
             return cfg
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                return AppConfig.from_dict(json.load(f))
+                cfg = AppConfig.from_dict(json.load(f))
+                self._apply_env_overrides(cfg)
+                return cfg
         except Exception as e:
             print(f"[Config] {e} — using defaults.")
-            return AppConfig()
+            cfg = AppConfig()
+            self._apply_env_overrides(cfg)
+            return cfg
+
+    def _apply_env_overrides(self, cfg: AppConfig) -> None:
+        gemini = os.getenv("GEMINI") or os.getenv("GEMINI_API_KEY")
+        notion = os.getenv("NOTION_AUTH") or os.getenv("NOTION_TOKEN")
+        db_id = os.getenv("DATABASE_ID") or os.getenv("NOTION_DATABASE_ID")
+        page_id = os.getenv("PAGE_ID") or os.getenv("STUDY_LOG_PAGE_ID")
+
+        if gemini:
+            cfg.gemini_api_key = gemini
+        if notion:
+            cfg.notion_token = notion
+
+        if not cfg.study_lists:
+            cfg.study_lists = [StudyListConfig()]
+
+        if db_id:
+            cfg.study_lists[0].database_id = db_id
+        if page_id:
+            cfg.study_lists[0].study_log_page_id = page_id
 
     def save(self, cfg: Optional[AppConfig] = None) -> None:
         if cfg:
@@ -460,7 +498,7 @@ class MemorySystem:
 
 
 # =============================================================================
-# LOCAL TASK DB  (replaces NotionClient — uses SQLite via backend/)
+# LOCAL TASK DB  (SQLite wrapper)
 # =============================================================================
 
 import collections as _collections
@@ -479,281 +517,11 @@ def _dbg(level: str, source: str, msg: str, data: Any = None) -> None:
     print(f"[{prefix} {source}] {msg}")
 
 
-class LocalTaskDB:
-    """
-    Drop-in replacement for NotionClient.
-    Stores tasks in atlas_tasks.db via the backend/ SQLAlchemy layer.
-    Exposes the same interface used by ActionPlanner, ActionExecutor,
-    EndOfDayHandler, AtlasAgent, and user_custom_command.
-    """
+class LocalTaskDB(LocalDBClient):
+    """Compatibility wrapper around the new LocalDBClient."""
 
     def __init__(self) -> None:
-        # Import here to avoid circular imports and make agent importable
-        # even before backend is set up
-        try:
-            from backend.database import SessionLocal, init_db
-            from backend import crud
-            from backend.schemas import TaskCreate, TaskUpdate, StatusEnum, PriorityEnum, EffortEnum
-            init_db()
-            self._SessionLocal = SessionLocal
-            self._crud         = crud
-            self._TaskCreate   = TaskCreate
-            self._TaskUpdate   = TaskUpdate
-            self._StatusEnum   = StatusEnum
-            self._PriorityEnum = PriorityEnum
-            self._EffortEnum   = EffortEnum
-            self.enabled       = True
-            self.write_enabled = True
-            self.log_enabled   = True   # local log always available
-            self.list_type     = "database"
-            _dbg("DB", "LocalTaskDB", "✓ SQLite task database ready")
-        except Exception as exc:
-            _dbg("ERROR", "LocalTaskDB", f"Failed to initialise: {exc}")
-            self.enabled       = False
-            self.write_enabled = False
-            self.log_enabled   = False
-            self.list_type     = "unknown"
-
-    # ── Session context ────────────────────────────────────────────────────
-
-    def _db(self):
-        """Return a new session. Caller must close it."""
-        return self._SessionLocal()
-
-    # ── Schema summary (mimics NotionClient.schema_summary) ───────────────
-
-    def schema_summary(self) -> Dict[str, str]:
-        return {
-            "Task Name":   "title",
-            "Status":      "status",
-            "Due date":    "date",
-            "Priority":    "select",
-            "Updated at":  "date",
-            "Effort level":"select",
-            "Summary":     "rich_text",
-        }
-
-    # ── Task creation ──────────────────────────────────────────────────────
-
-    def create_task(self, task: "StudyTask") -> Optional[str]:
-        """Create a task from a StudyTask object. Returns the new task id."""
-        if not self.write_enabled:
-            _dbg("WARN", "create_task", "Write disabled")
-            return None
-        try:
-            db = self._db()
-            # Build due_date
-            due = None
-            if task.due_date:
-                try:
-                    raw = str(task.due_date).strip()
-                    # Normalise: ensure seconds
-                    if "T" in raw and len(raw.split("T")[1].split("+")[0].split("Z")[0]) == 5:
-                        raw += ":00"
-                    due = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-                except Exception:
-                    due = None
-
-            # Map enums safely
-            status   = task.status if task.status in VALID_STATUSES else STATUS_NOT_STARTED
-            priority = task.priority if task.priority in VALID_PRIORITIES else "Medium"
-            effort   = task.effort_level if task.effort_level in VALID_EFFORTS else None
-
-            data = self._TaskCreate(
-                task_name    = str(task.title or "Untitled")[:500],
-                status       = self._StatusEnum(status),
-                priority     = self._PriorityEnum(priority),
-                effort_level = self._EffortEnum(effort) if effort else None,
-                summary      = str(task.summary or "")[:2000] or None,
-                due_date     = due,
-            )
-            result = self._crud.create_task(db, data)
-            _dbg("DB", "create_task", f"✓ Created '{task.title[:50]}' id={result.id[:8]}")
-            return result.id
-        except Exception as exc:
-            _dbg("ERROR", "create_task", f"✗ Failed: {exc}")
-            return None
-        finally:
-            db.close()
-
-    # ── Task updates ──────────────────────────────────────────────────────
-
-    def update_task_status(self, task_id: str, status: str) -> bool:
-        if not self.write_enabled:
-            return False
-        if status not in VALID_STATUSES:
-            _dbg("ERROR", "update_status", f"Invalid status: {status!r}")
-            return False
-        try:
-            db   = self._db()
-            data = self._TaskUpdate(status=self._StatusEnum(status))
-            t    = self._crud.update_task(db, task_id, data)
-            ok   = t is not None
-            _dbg("DB", "update_status", f"{'✓' if ok else '✗'} {task_id[:8]} → {status}")
-            return ok
-        except Exception as exc:
-            _dbg("ERROR", "update_status", str(exc))
-            return False
-        finally:
-            db.close()
-
-    def update_task_properties(self, task_id: str, props: Dict[str, Any]) -> bool:
-        """Accept a flat dict of field→value and apply as partial update."""
-        if not self.write_enabled:
-            return False
-        try:
-            db   = self._db()
-            # Build TaskUpdate from the props dict
-            update_kwargs: Dict[str, Any] = {}
-            if "task_name" in props or "title" in props:
-                update_kwargs["task_name"] = props.get("task_name") or props.get("title")
-            for key in ("status", "priority", "effort_level", "summary", "due_date"):
-                if key in props:
-                    update_kwargs[key] = props[key]
-            data = self._TaskUpdate(**update_kwargs)
-            t    = self._crud.update_task(db, task_id, data)
-            ok   = t is not None
-            _dbg("DB", "update_props", f"{'✓' if ok else '✗'} {task_id[:8]}")
-            return ok
-        except Exception as exc:
-            _dbg("ERROR", "update_props", str(exc))
-            return False
-        finally:
-            db.close()
-
-    # ── Task deletion ──────────────────────────────────────────────────────
-
-    def delete_task(self, task_id: str) -> bool:
-        """Hard-delete a task by ID."""
-        try:
-            db = self._db()
-            ok = self._crud.delete_task(db, task_id)
-            _dbg("DB", "delete_task", f"{'✓' if ok else '✗'} {task_id[:8]}")
-            return ok
-        except Exception as exc:
-            _dbg("ERROR", "delete_task", str(exc))
-            return False
-        finally:
-            db.close()
-
-    def archive_task(self, task_id: str) -> bool:
-        """Soft-delete via archived=True."""
-        try:
-            db = self._db()
-            t  = self._crud.archive_task(db, task_id)
-            ok = t is not None
-            _dbg("DB", "archive_task", f"{'✓' if ok else '✗'} {task_id[:8]}")
-            return ok
-        except Exception as exc:
-            _dbg("ERROR", "archive_task", str(exc))
-            return False
-        finally:
-            db.close()
-
-    # ── Queries ───────────────────────────────────────────────────────────
-
-    def fetch_all_tasks(self) -> List[Dict[str, Any]]:
-        """Return all active tasks as plain dicts (mirroring Notion page shape)."""
-        try:
-            from backend.schemas import TaskFilter
-            db = self._db()
-            items, _ = self._crud.get_tasks(db, TaskFilter(page_size=200))
-            return [self._task_to_dict(t) for t in items]
-        except Exception as exc:
-            _dbg("ERROR", "fetch_all_tasks", str(exc))
-            return []
-        finally:
-            db.close()
-
-    def fetch_tasks_by_status(self, status: str) -> List[Dict[str, Any]]:
-        try:
-            from backend.schemas import TaskFilter
-            db = self._db()
-            items, _ = self._crud.get_tasks(
-                db, TaskFilter(status=self._StatusEnum(status), page_size=200)
-            )
-            return [self._task_to_dict(t) for t in items]
-        except Exception as exc:
-            _dbg("ERROR", "fetch_tasks_by_status", str(exc))
-            return []
-        finally:
-            db.close()
-
-    def fetch_completed_topics(self) -> List[str]:
-        return [t["task_name"] for t in self.fetch_tasks_by_status(STATUS_DONE) if t.get("task_name")]
-
-    def append_study_log(self, text: str) -> None:
-        """Write a timestamped log line to atlas_study_log.txt."""
-        try:
-            ts  = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-            log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "atlas_study_log.txt")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"[{ts}] {text}\n")
-        except Exception as exc:
-            _dbg("WARN", "append_study_log", str(exc))
-
-    def add_column(self, *args, **kwargs) -> bool:
-        """No-op: schema is fixed in SQLite."""
-        _dbg("WARN", "add_column", "Schema changes not supported in local DB mode")
-        return False
-
-    def delete_column(self, *args, **kwargs) -> bool:
-        """No-op: schema is fixed in SQLite."""
-        return False
-
-    # ── Extractors (same interface as NotionClient) ───────────────────────
-
-    @staticmethod
-    def get_task_title(task_dict: Dict[str, Any]) -> str:
-        return task_dict.get("task_name", "") or ""
-
-    @staticmethod
-    def get_task_status(task_dict: Dict[str, Any]) -> str:
-        return task_dict.get("status", STATUS_NOT_STARTED) or STATUS_NOT_STARTED
-
-    # ── Internal ──────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _task_to_dict(task) -> Dict[str, Any]:
-        """Convert ORM Task to a plain dict with the same keys used throughout Atlas."""
-        return {
-            "id":           task.id,
-            "task_name":    task.task_name,
-            "status":       task.status,
-            "priority":     task.priority,
-            "effort_level": task.effort_level or "",
-            "summary":      task.summary or "",
-            "due_date":     task.due_date.isoformat() if task.due_date else "",
-            "due":          task.due_date.isoformat() if task.due_date else "",
-            "position":     task.position,
-            "archived":     task.archived,
-            "created_at":   task.created_at.isoformat() if task.created_at else "",
-            "updated_at":   task.updated_at.isoformat() if task.updated_at else "",
-        }
-
-    @staticmethod
-    def _s(v: Any) -> str:
-        """Flatten list/None into a plain string (compatibility shim)."""
-        if isinstance(v, list):
-            v = v[0] if v else ""
-        return str(v).strip() if v else ""
-
-    @staticmethod
-    def _format_due_date(raw: str) -> Optional[str]:
-        if not raw:
-            return None
-        raw = raw.strip()
-        if "T" in raw:
-            parts = raw.split("T")
-            time_part = parts[1].split("+")[0].split("Z")[0]
-            if len(time_part) == 5:
-                raw = f"{parts[0]}T{time_part}:00"
-            return raw
-        try:
-            datetime.strptime(raw, "%Y-%m-%d")
-            return f"{raw}T09:00:00"
-        except ValueError:
-            return None
+        super().__init__(logger=_dbg)
 
 # =============================================================================
 # GEMINI CLIENT
@@ -944,7 +712,7 @@ PLANNER_SYSTEM_PROMPT = textwrap.dedent("""
 # =============================================================================
 
 class ActionPlanner:
-    def __init__(self, gemini: GeminiClient, db: LocalTaskDB,
+    def __init__(self, gemini: GeminiClient, db: TaskService,
                  memory: MemorySystem) -> None:
         self.gemini = gemini
         self.db     = db
@@ -1011,7 +779,7 @@ class ActionPlanner:
 # =============================================================================
 
 class ActionExecutor:
-    def __init__(self, db: LocalTaskDB) -> None:
+    def __init__(self, db: TaskService) -> None:
         self.db = db
 
     def execute(self, plan: ActionPlan) -> List[str]:
@@ -1072,11 +840,7 @@ class ActionExecutor:
             if "due_date" in p:
                 due = LocalTaskDB._format_due_date(s(p["due_date"]))
                 if due:
-                    try:
-                        from datetime import datetime as _dt
-                        props["due_date"] = _dt.fromisoformat(due)
-                    except Exception:
-                        pass
+                    props["due_date"] = due
             return self.db.update_task_properties(pid, props)
 
         if act == "delete_task":
@@ -1087,10 +851,21 @@ class ActionExecutor:
             self.db.append_study_log(s(p.get("text", item.target)))
             return True
 
-        # add_column / delete_column — no-ops for local DB
-        if act in ("add_column", "delete_column"):
-            _dbg("WARN", "executor", f"{act} not supported in local DB mode")
-            return True
+        if act == "add_column":
+            name = s(p.get("name") or p.get("column") or p.get("title"))
+            col_type = s(p.get("type") or p.get("property_type") or p.get("column_type"))
+            options = p.get("options") or p.get("select_options")
+            if not name or not col_type:
+                _dbg("ERROR", "executor", "add_column missing name/type", {"payload": p})
+                return False
+            return self.db.add_column(name, col_type, options if isinstance(options, list) else None)
+
+        if act == "delete_column":
+            name = s(p.get("name") or p.get("column") or p.get("title"))
+            if not name:
+                _dbg("ERROR", "executor", "delete_column missing name", {"payload": p})
+                return False
+            return self.db.delete_column(name)
 
         return False
 
@@ -1113,7 +888,7 @@ DAILY_COLUMNS: set = set()   # no-op in local DB mode
 
 
 class EndOfDayHandler:
-    def __init__(self, gemini: GeminiClient, db: LocalTaskDB,
+    def __init__(self, gemini: GeminiClient, db: TaskService,
                  memory: MemorySystem) -> None:
         self.gemini = gemini
         self.db     = db
@@ -1149,13 +924,13 @@ class EndOfDayHandler:
 # =============================================================================
 
 class AtlasAgent:
-    """Main orchestrator — uses LocalTaskDB instead of NotionClient."""
+    """Main orchestrator — routes tasks via TaskService."""
 
     def __init__(
         self,
         config: AppConfig,
         gemini: GeminiClient,
-        db: LocalTaskDB,
+        db: TaskService,
         history_file: str = HISTORY_FILE,
     ) -> None:
         self.config       = config
@@ -1527,6 +1302,15 @@ class SettingsWindow(tk.Toplevel):
             setattr(self, attr, e)
         gf.columnconfigure(1, weight=1)
 
+        # Data source selector
+        ds_row = len(fields)
+        tk.Label(gf, text="Data source:", bg=C["surface"], fg=C["muted"],
+                 font=("Helvetica", 11)).grid(row=ds_row, column=0, sticky="w", padx=12, pady=10)
+        self.data_source_var = tk.StringVar(value=cfg.data_source or "local")
+        ds_select = ttk.Combobox(gf, textvariable=self.data_source_var,
+                                 values=["local", "notion"], state="readonly", width=18)
+        ds_select.grid(row=ds_row, column=1, sticky="w", padx=12, pady=10)
+
         # Personality
         pf = tk.Frame(nb, bg=C["surface"])
         nb.add(pf, text="  Personality  ")
@@ -1631,6 +1415,10 @@ class SettingsWindow(tk.Toplevel):
         cfg.gemini_api_key = self.gemini_entry.get().strip()
         cfg.model_name     = self.model_entry.get().strip() or "gemini-1.5-flash"
         cfg.notion_token   = self.notion_entry.get().strip()
+        ds = (self.data_source_var.get() or "local").lower()
+        if ds not in {"local", "notion"}:
+            ds = "local"
+        cfg.data_source    = ds
         new_p = self.personality_text.get("1.0", tk.END).strip() or DEFAULT_PERSONALITY
         cfg.personality    = new_p
         save_personality(new_p)
@@ -1654,13 +1442,16 @@ class SettingsWindow(tk.Toplevel):
             return
 
         active = cfg.study_lists[cfg.active_study_list_index]
-        new_notion = NotionClient(cfg.notion_token, active.database_id, active.study_log_page_id)
+        local_db = LocalTaskDB()
+        notion = NotionClient(cfg.notion_token, active.database_id, active.study_log_page_id, logger=_dbg)
+        service = TaskService(cfg.data_source, notion, local_db, logger=_dbg)
         self.agent.config   = cfg
         self.agent.gemini   = new_gemini
-        self.agent.notion   = new_notion
-        self.agent.planner  = ActionPlanner(new_gemini, new_notion, self.agent.memory)
-        self.agent.executor = ActionExecutor(new_notion)
-        self.agent.eod      = EndOfDayHandler(new_gemini, new_notion, self.agent.memory)
+        self.agent.db       = service
+        self.agent.notion   = service
+        self.agent.planner  = ActionPlanner(new_gemini, service, self.agent.memory)
+        self.agent.executor = ActionExecutor(service)
+        self.agent.eod      = EndOfDayHandler(new_gemini, service, self.agent.memory)
         messagebox.showinfo("Atlas", "Settings saved and applied.")
 
 
@@ -2046,8 +1837,10 @@ def build_agent(config_manager: ConfigManager) -> AtlasAgent:
         cfg.study_lists.append(StudyListConfig())
     idx   = max(0, min(cfg.active_study_list_index, len(cfg.study_lists) - 1))
     space = cfg.study_lists[idx]
-    notion = NotionClient(cfg.notion_token, space.database_id, space.study_log_page_id)
-    return AtlasAgent(config=cfg, gemini=gemini, notion=notion)
+    local_db = LocalTaskDB()
+    notion = NotionClient(cfg.notion_token, space.database_id, space.study_log_page_id, logger=_dbg)
+    service = TaskService(cfg.data_source, notion, local_db, logger=_dbg)
+    return AtlasAgent(config=cfg, gemini=gemini, db=service)
 
 
 def main() -> None:

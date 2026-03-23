@@ -170,6 +170,9 @@ class LocalDBClient:
             except Exception:
                 pass
 
+    def update_task(self, task_id: str, props: Dict[str, Any]) -> bool:
+        return self.update_task_properties(task_id, props)
+
     # ── Task deletion ─────────────────────────────────────────────────────
 
     def delete_task(self, task_id: str) -> bool:
@@ -237,6 +240,9 @@ class LocalDBClient:
                 db.close()
             except Exception:
                 pass
+
+    def fetch_tasks(self) -> List[Dict[str, Any]]:
+        return self.fetch_all_tasks()
 
     def fetch_tasks_by_status(self, status: str) -> List[Dict[str, Any]]:
         try:

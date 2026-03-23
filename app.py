@@ -39,6 +39,8 @@ try:
         STATUS_DONE, STATUS_NOT_STARTED, HISTORY_FILE,
         _DEBUG_LOG, _dbg, local_now, fmt_local,
     )
+    from backend.notion_client import NotionClient
+    from backend.task_service import TaskService
     AGENT_AVAILABLE = True
 except ImportError as e:
     print(f"[Server] Import error: {e}")
@@ -64,7 +66,7 @@ except ImportError as e:
 app = FastAPI(
     title="Atlas AI Study Planner",
     version="5.0",
-    description="Local AI study planner — SQLite, no cloud dependencies.",
+    description="Local-first AI study planner with optional Notion data source.",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -120,11 +122,17 @@ def init_atlas() -> None:
         config_manager = ConfigManager()
         cfg   = config_manager.config
         gem   = GeminiClient(cfg.gemini_api_key, cfg.model_name)
-        db    = LocalTaskDB()
-        agent = AtlasAgent(config=cfg, gemini=gem, db=db)
-        _dbg("INFO", "server", "Atlas initialised", {"model": cfg.model_name})
-        push_notif("Atlas ready", f"Local DB · {cfg.model_name}", "success")
-        print(f"[Server] ✓ Atlas ready  model={cfg.model_name}")
+        if not cfg.study_lists:
+            cfg.study_lists = AppConfig().study_lists
+        idx = max(0, min(cfg.active_study_list_index, len(cfg.study_lists) - 1))
+        space = cfg.study_lists[idx]
+        local_db = LocalTaskDB()
+        notion = NotionClient(cfg.notion_token, space.database_id, space.study_log_page_id, logger=_dbg)
+        service = TaskService(cfg.data_source, notion, local_db, logger=_dbg)
+        agent = AtlasAgent(config=cfg, gemini=gem, db=service)
+        _dbg("INFO", "server", "Atlas initialised", {"model": cfg.model_name, "data_source": cfg.data_source})
+        push_notif("Atlas ready", f"{service.effective_source().upper()} · {cfg.model_name}", "success")
+        print(f"[Server] ✓ Atlas ready  model={cfg.model_name} source={service.effective_source()}")
     except Exception as e:
         _dbg("ERROR", "server", f"Init error: {e}")
         push_notif("Init failed", str(e), "error")
@@ -155,9 +163,12 @@ async def index():
 @app.get("/api/status")
 async def api_status():
     task_cnt = 0
+    svc_status: Dict[str, Any] = {}
     if agent:
         try:
             task_cnt = len(agent.db.fetch_all_tasks())
+            if hasattr(agent.db, "status"):
+                svc_status = agent.db.status()
         except Exception:
             pass
     return {
@@ -168,6 +179,11 @@ async def api_status():
         "date":       date.today().isoformat(),
         "local_time": fmt_local("%Y-%m-%d %H:%M"),
         "task_count": task_cnt,
+        "data_source": svc_status.get("data_source", "local"),
+        "effective_source": svc_status.get("effective_source", "local"),
+        "notion_ready": svc_status.get("notion_ready", False),
+        "last_fallback": svc_status.get("last_fallback"),
+        "notion_last_error": svc_status.get("notion_last_error"),
     }
 
 # =============================================================================
@@ -279,7 +295,7 @@ async def api_task_status(task_id: str, request: Request):
     ok = agent.db.update_task_status(task_id, status)
     if ok:
         push_notif("Task updated", f"Status → {status}", "success")
-    return {"ok": ok}
+    return {"ok": ok, "source": agent.db.effective_source()}
 
 
 @app.delete("/api/tasks/{task_id}/delete")
@@ -288,8 +304,8 @@ async def api_task_delete_compat(task_id: str):
         raise HTTPException(status_code=400, detail="Agent not ready")
     ok = agent.db.delete_task(task_id)
     if ok:
-        push_notif("Task deleted", "Removed from local database", "info")
-    return {"ok": ok}
+        push_notif("Task deleted", "Removed from task list", "info")
+    return {"ok": ok, "source": agent.db.effective_source()}
 
 
 @app.delete("/api/tasks/{task_id}")
@@ -298,8 +314,23 @@ async def api_task_delete(task_id: str):
         raise HTTPException(status_code=400, detail="Agent not ready")
     ok = agent.db.delete_task(task_id)
     if ok:
-        push_notif("Task deleted", "Removed from local database", "info")
-    return {"ok": ok}
+        push_notif("Task deleted", "Removed from task list", "info")
+    return {"ok": ok, "source": agent.db.effective_source()}
+
+
+@app.post("/api/tasks/reorder")
+async def api_tasks_reorder(request: Request):
+    if not agent:
+        raise HTTPException(status_code=400, detail="Agent not ready")
+    body = await request.json()
+    items = body.get("tasks") or []
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail="missing tasks")
+    updated = agent.db.reorder_tasks(items)
+    ok = updated > 0
+    if ok:
+        push_notif("Tasks reordered", f"{updated} task(s) updated", "success")
+    return {"ok": ok, "updated": updated, "source": agent.db.effective_source()}
 
 # =============================================================================
 # MEMORY / HISTORY / DEBUG
@@ -357,13 +388,14 @@ async def api_db_test():
     if not agent:
         return {"ok": False, "error": "Agent not initialised"}
     try:
-        tasks = agent.db.fetch_all_tasks()
+        local = getattr(agent.db, "local", None) or agent.db
+        tasks = local.fetch_all_tasks()
         push_notif("DB test", f"{len(tasks)} tasks in local DB", "success")
         return {
             "ok":         True,
             "task_count": len(tasks),
             "db_path":    str(DB_PATH),
-            "schema":     agent.db.schema_summary(),
+            "schema":     local.schema_summary() if hasattr(local, "schema_summary") else {},
             "db_type":    "SQLite (local)",
         }
     except Exception as exc:
@@ -373,7 +405,23 @@ async def api_db_test():
 
 @app.post("/api/notion/test")
 async def api_notion_test_compat():
-    return await api_db_test()
+    if not agent:
+        return {"ok": False, "error": "Agent not initialised"}
+    notion = getattr(agent.db, "notion", None)
+    if not notion:
+        return {"ok": False, "error": "Notion client not configured"}
+    try:
+        ok = notion.refresh_schema()
+        if not ok:
+            return {"ok": False, "error": "Schema validation failed"}
+        return {
+            "ok": True,
+            "schema": notion.schema_summary() if hasattr(notion, "schema_summary") else {},
+            "data_source_id": getattr(notion, "data_source_id", None),
+        }
+    except Exception as exc:
+        _dbg("ERROR", "notion_test", str(exc))
+        return {"ok": False, "error": str(exc)}
 
 # =============================================================================
 # CONFIG
@@ -388,9 +436,17 @@ async def api_config_get():
         "gemini_api_key": cfg.gemini_api_key,
         "model_name":     cfg.model_name,
         "personality":    load_personality(),
-        "notion_token":   "",
-        "study_lists":    [{"name": "Local DB", "database_id": "", "study_log_page_id": ""}],
-        "active_index":   0,
+        "notion_token":   cfg.notion_token,
+        "study_lists":    [
+            {
+                "name": s.name,
+                "database_id": s.database_id,
+                "study_log_page_id": s.study_log_page_id,
+            }
+            for s in (cfg.study_lists or [])
+        ],
+        "active_index":   cfg.active_study_list_index,
+        "data_source":    cfg.data_source,
     }
 
 
@@ -403,6 +459,28 @@ async def api_config_post(request: Request):
     if d.get("gemini_api_key"): cfg.gemini_api_key = d["gemini_api_key"]
     if d.get("model_name"):     cfg.model_name     = d["model_name"]
     if d.get("personality"):    save_personality(d["personality"])
+    if "notion_token" in d:
+        cfg.notion_token = d.get("notion_token") or ""
+    if "data_source" in d:
+        ds = (d.get("data_source") or "local").lower()
+        if ds not in {"local", "notion"}:
+            ds = "local"
+        cfg.data_source = ds
+    if "study_lists" in d and isinstance(d["study_lists"], list) and d["study_lists"]:
+        cls = type(cfg.study_lists[0]) if cfg.study_lists else type(AppConfig().study_lists[0])
+        cfg.study_lists = [
+            cls(
+                name=x.get("name", "Space"),
+                database_id=x.get("database_id", ""),
+                study_log_page_id=x.get("study_log_page_id", ""),
+            )
+            for x in d["study_lists"]
+        ]
+    if "active_index" in d:
+        try:
+            cfg.active_study_list_index = int(d["active_index"])
+        except Exception:
+            pass
     config_manager.save(cfg)
     init_atlas()
     push_notif("Settings saved", "Reconnecting…", "info")

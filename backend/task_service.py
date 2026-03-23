@@ -87,6 +87,9 @@ class TaskService:
                 self._fallback("update_task_properties", "Notion not ready")
         return self.local.update_task_properties(task_id, props) if self.local else False
 
+    def update_task(self, task_id: str, props: Dict[str, Any]) -> bool:
+        return self.update_task_properties(task_id, props)
+
     def delete_task(self, task_id: str) -> bool:
         if self.data_source == "notion":
             if self._notion_ready():
@@ -114,6 +117,9 @@ class TaskService:
             else:
                 self._fallback("fetch_all_tasks", "Notion not ready")
         return self.local.fetch_all_tasks() if self.local else []
+
+    def fetch_tasks(self) -> List[Dict[str, Any]]:
+        return self.fetch_all_tasks()
 
     def fetch_tasks_by_status(self, status: str) -> List[Dict[str, Any]]:
         if self.data_source == "notion":
@@ -161,4 +167,5 @@ class TaskService:
             "notion_ready": self._notion_ready(),
             "local_ready": bool(self.local and self.local.enabled),
             "last_fallback": self.last_fallback,
+            "notion_last_error": getattr(self.notion, "last_error", None) if self.notion else None,
         }
