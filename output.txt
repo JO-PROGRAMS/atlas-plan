@@ -1,0 +1,24 @@
+/Users/mac/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/mac/Library/Python/3.9/lib/python/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/mac/Library/Python/3.9/lib/python/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+INFO:     Started server process [70302]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:5005 (Press CTRL+C to quit)
+[Server] ✓ SQLite database initialised
+[◈ LocalDBClient] SQLite task database ready
+[N schema] GET /databases/31f685ea2e9b803eab7af1ca5dae473f -> 200
+[N schema] GET /data_sources/31f685ea-2e9b-80ba-aa31-000be09bea57 -> 200
+[· server] Atlas initialised
+[Server] ✓ Atlas ready  model=gemini-2.5-flash source=local
+INFO:     127.0.0.1:59573 - "GET /api/tasks HTTP/1.1" 200 OK
+HTTP 200
+Length: 2952
+Data preview: b'[{"id":"66ac4183-5eb2-4561-a195-f68a39c4d3cd","title":"Timed Exam-Style Questions (Mixed Topics)","task_name":"Timed Exam-Style Questions (Mixed Topics)","status":"Done","priority":"High","effort":"Me'
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [70302]

@@ -195,10 +195,12 @@ body.cc #cd{transform:translate(-50%,-50%) scale(.5)}
   position:absolute;right:-1px;width:3px;border-radius:2px;
   background:linear-gradient(180deg,
     rgba(77,144,255,0) 0%,
+    rgba(100,180,255,calc(var(--ga,0) * .22)) calc(var(--gy,50%) - 18%),
     rgba(100,180,255,var(--ga,0)) var(--gy,50%),
+    rgba(100,180,255,calc(var(--ga,0) * .22)) calc(var(--gy,50%) + 18%),
     rgba(77,144,255,0) 100%);
   top:0;height:100%;pointer-events:none;
-  transition:opacity .1s;
+  transition:opacity .2s var(--ease-fluid),filter .2s var(--ease-fluid);
   filter:blur(2px);
 }
 
@@ -344,17 +346,20 @@ textarea:focus-visible{
 .ai-thinking{
   display:inline-flex;align-items:center;gap:6px;
   font-size:12px;font-family:'JetBrains Mono',monospace;
-  letter-spacing:.15px;color:rgba(228,234,246,.74);
+  letter-spacing:.15px;color:rgba(248,252,255,.96);
   position:relative
 }
 .ai-thinking::after{
   content:attr(data-label);
   position:absolute;left:0;top:0;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  z-index:1;
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.72) 48%,rgba(255,255,255,0));
   background-size:200% 100%;
   background-position:-100% 0;
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;
+  filter:brightness(1.15) contrast(1.08);
   animation:shimmerText 1.2s linear infinite;
   white-space:nowrap;
 }
@@ -403,7 +408,7 @@ textarea:focus-visible{
 .hint{font-size:9.5px;color:var(--t4);font-family:'JetBrains Mono',monospace}
 
 /* ═══════ TASKS ═══════ */
-#p-tasks{background:transparent;position:relative;isolation:isolate;overflow-y:auto}
+#p-tasks{background:transparent;position:relative;isolation:isolate;overflow:hidden}
 #p-tasks::before{display:none}
 #p-tasks .ph{display:none}
 .tgrid{
@@ -416,6 +421,7 @@ textarea:focus-visible{
   max-width:100%;
 }
 .tasks-tools{width:100%;max-width:920px;margin:0 auto 4px;display:flex;flex-direction:column;gap:10px}
+.task-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;width:100%;max-width:920px;margin:0 auto;padding-top:8px;padding-bottom:30px;flex:1 1 auto;min-height:50px}
 .task-source{width:100%;max-width:920px;margin:0 auto 6px;padding:11px 16px;border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(8,12,22,.55);backdrop-filter:blur(30px) saturate(1.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 32px rgba(0,0,0,.4);display:flex;gap:12px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2)}
 .task-source-pill{padding:4px 12px;border-radius:999px;background:rgba(146,190,255,.15);color:#bfdbfe;font-size:10px;letter-spacing:.35px}
 .task-source-count{font-size:11px;color:var(--t1)}
@@ -433,6 +439,40 @@ textarea:focus-visible{
 .task-tab.active{background:rgba(255,255,255,.08);color:var(--t1)}
 .task-search{margin-left:auto;min-width:240px;max-width:360px;flex:1;background:rgba(16, 20, 32, 0.16) !important;backdrop-filter:blur(40px) saturate(1.4);border:1px solid rgba(255,255,255,.12);color:var(--t1);border-radius:12px;padding:11px 12px;font-family:'Manrope',sans-serif;font-size:13px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 32px rgba(0,0,0,.24);transition:border-color .2s var(--ease),box-shadow .24s var(--ease)}
 .task-search:focus{outline:none;border-color:rgba(255,255,255,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 12px 40px rgba(0,0,0,.32)}
+
+/* Tasks top controls: remove stacked overlays causing ugly bar artifacts */
+.task-source.glass::before,
+.task-source.glass::after{display:none}
+.tasks-tools-top .tasks-back.glass,
+.tasks-tools-top .task-tabs.glass,
+.tasks-tools-top .task-search.glass{
+  background:rgba(12,18,30,.26) !important;
+  border:1px solid rgba(255,255,255,.12) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(0,0,0,.24) !important;
+  backdrop-filter:blur(26px) saturate(1.2) !important;
+  -webkit-backdrop-filter:blur(26px) saturate(1.2) !important;
+}
+.tasks-tools-top .tasks-back.glass::before,
+.tasks-tools-top .tasks-back.glass::after,
+.tasks-tools-top .task-tabs.glass::before,
+.tasks-tools-top .task-tabs.glass::after,
+.tasks-tools-top .task-search.glass::before,
+.tasks-tools-top .task-search.glass::after{display:none}
+.tasks-tools-top .liquid-btn::before,
+.tasks-tools-top .liquid-btn::after{display:none}
+.tasks-tools-top .task-tab.glass{
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+.tasks-tools-top .task-tab.glass::before,
+.tasks-tools-top .task-tab.glass::after{display:none}
+.tasks-tools-top .task-tab.active{
+  background:rgba(255,255,255,.1) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
+}
 .tgrid .empty{max-width:920px;margin:0 auto;color:var(--t3);width:100%}
 .tcard{
   --drag-x:.5;
@@ -446,23 +486,34 @@ textarea:focus-visible{
   background:rgba(16,20,32,.38);
   backdrop-filter:blur(24px) saturate(1.24);
   -webkit-backdrop-filter:blur(24px) saturate(1.24);
-  will-change:transform;
   flex-shrink:0;
 }
-.tcard::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:radial-gradient(circle at 22% 18%,rgba(220,236,255,.2),rgba(220,236,255,0) 62%);opacity:.52;z-index:1;transition:opacity .24s var(--ease-fluid),background-position .24s var(--ease-fluid)}
+.tcard::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;z-index:1;opacity:.24;padding:1.2px;
+  background:conic-gradient(from calc((var(--drag-x) + var(--drag-y)) * 180deg),rgba(255,108,130,.56),rgba(255,191,105,.56),rgba(253,242,120,.5),rgba(130,246,189,.52),rgba(125,211,252,.56),rgba(167,139,250,.58),rgba(244,114,182,.56),rgba(255,108,130,.56));
+  filter:saturate(calc(1.05 + var(--drag-v) * .95)) blur(calc(.45px + var(--drag-v) * 1.4px));
+  mix-blend-mode:screen;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  transition:opacity .24s var(--ease-fluid),transform .24s var(--ease-fluid),filter .24s var(--ease-fluid);
+}
 .tcard::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;opacity:.3;background:
-  radial-gradient(180px 150px at calc(var(--drag-x) * 100%) calc(var(--drag-y) * 100%), rgba(180,220,255,calc(.15 * var(--edge-clamp))), rgba(180,220,255,0) 72%),
+  radial-gradient(220px 170px at calc(var(--drag-x) * 100%) calc(var(--drag-y) * 100%), rgba(176,220,255,calc(.2 * var(--edge-clamp))), rgba(176,220,255,0) 72%),
+  radial-gradient(130px 120px at calc((1 - var(--drag-x)) * 100%) calc((1 - var(--drag-y)) * 100%), rgba(206,233,255,calc(.09 * var(--drag-v))), rgba(206,233,255,0) 70%),
   linear-gradient(125deg, rgba(255,255,255,.12), rgba(255,255,255,0) 54%);
   backdrop-filter:blur(calc(18px + (var(--drag-v) * 12px))) saturate(calc(1.16 + (var(--drag-v) * .26)));
   -webkit-backdrop-filter:blur(calc(18px + (var(--drag-v) * 12px))) saturate(calc(1.16 + (var(--drag-v) * .26)));
   transition:opacity .24s var(--ease-fluid),background-position .24s var(--ease-fluid),transform .24s var(--ease-fluid);
 }
-.tcard.pm::before,.tcard.pl::before,.tcard.ph::before{opacity:.2}
+.tcard.pm::before,.tcard.pl::before,.tcard.ph::before{opacity:.16}
 .tcard:hover{transform:translateY(-2px)}
+.tcard:hover::before{opacity:.36}
 .tcard:hover::after{opacity:.48}
 .tcard.dragging{opacity:.96;transform:scale(.992) translateY(-1px)}
-.tcard.dragging::before{opacity:.68}
-.tcard.dragging::after{opacity:.92}
+.tcard.dragging::before{opacity:.78;transform:scale(1.008)}
+.tcard.dragging::after{opacity:.95}
+.tcard.reordering:not(.dragging)::before{opacity:.42}
 .tcard.reordering:not(.dragging)::after{opacity:.42}
 .tcard.new{animation:cardNew .45s var(--ease) both}
 .tcard.updated{animation:cardPulse .6s var(--ease) both}
@@ -658,6 +709,8 @@ body.focus-mode .topbar{opacity:.15}
 
 .liquid-btn{position:relative;overflow:hidden;isolation:isolate}
 .liquid-btn{
+  --mx:.5;
+  --my:.5;
   --liquid-orb-dur:.35s;
   --liquid-sheen-dur:.26s;
   --liquid-fade-dur:.24s;
@@ -1193,20 +1246,39 @@ if(USE_CURSOR){
   const glow = document.getElementById('sbglow');
   const sb   = document.getElementById('sb');
   if(!glow||!sb) return;
+
+  let targetA=0, targetY=50;
+  let smoothA=0, smoothY=50;
+
+  function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+  function smoothstep(t){return t*t*(3-2*t);}
+
   document.addEventListener('mousemove', e => {
     const rect = sb.getBoundingClientRect();
-    // Distance from right edge of sidebar
-    const distX = rect.right - e.clientX;
-    // Glow intensity: strong when cursor is within 300px of sidebar edge
-    const maxDist = 260;
-      const alpha = distX < maxDist && distX > -60
-        ? Math.max(0, 1 - distX/maxDist) * 0.46
-      : 0;
-    // Vertical position of glow: follows cursor Y as % of sidebar height
-    const gy = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
-    glow.style.setProperty('--ga', alpha.toFixed(3));
-    glow.style.setProperty('--gy', gy + '%');
-  });
+    const edgeDist = Math.abs(e.clientX - rect.right);
+
+    const followDist = 520;
+    const fullDist = 260;
+    let a = 0;
+    if(edgeDist < followDist){
+      const t = 1 - edgeDist / followDist;
+      const eased = smoothstep(clamp(t,0,1));
+      const nearBoost = edgeDist < fullDist ? 1 : 0.56;
+      a = eased * 0.48 * nearBoost;
+    }
+    targetA = a;
+
+    const gy = ((e.clientY - rect.top) / rect.height) * 100;
+    targetY = clamp(gy, 0, 100);
+  },{passive:true});
+
+  (function glowLoop(){
+    smoothA += (targetA - smoothA) * 0.14;
+    smoothY += (targetY - smoothY) * 0.18;
+    glow.style.setProperty('--ga', smoothA.toFixed(3));
+    glow.style.setProperty('--gy', smoothY.toFixed(2) + '%');
+    requestAnimationFrame(glowLoop);
+  })();
 })();
 
 function bh(){
@@ -1220,16 +1292,68 @@ function prepLiquidButtons(){
   document.querySelectorAll('.liquid-btn').forEach(btn=>{
     if(btn.dataset.cornerReady) return;
     btn.dataset.cornerReady='1';
+
+    const state={
+      tx:.5,ty:.5,
+      x:.5,y:.5,
+      active:false,
+      raf:0
+    };
+
+    const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+
+    function tick(){
+      state.x += (state.tx - state.x) * 0.28;
+      state.y += (state.ty - state.y) * 0.28;
+      btn.style.setProperty('--mx', state.x.toFixed(3));
+      btn.style.setProperty('--my', state.y.toFixed(3));
+
+      if(
+        state.active ||
+        Math.abs(state.tx - state.x) > 0.0015 ||
+        Math.abs(state.ty - state.y) > 0.0015
+      ){
+        state.raf = requestAnimationFrame(tick);
+      }else{
+        state.raf = 0;
+      }
+    }
+
+    function wake(){
+      if(!state.raf) state.raf = requestAnimationFrame(tick);
+    }
+
+    btn.addEventListener('pointerenter',e=>{
+      const rect=btn.getBoundingClientRect();
+      if(!rect.width||!rect.height)return;
+      state.active=true;
+      state.tx=clamp((e.clientX-rect.left)/rect.width,0,1);
+      state.ty=clamp((e.clientY-rect.top)/rect.height,0,1);
+      wake();
+    },{passive:true});
+
     btn.addEventListener('pointermove',e=>{
       const rect=btn.getBoundingClientRect();
       if(!rect.width||!rect.height)return;
-      btn.style.setProperty('--mx',((e.clientX-rect.left)/rect.width).toFixed(3));
-      btn.style.setProperty('--my',((e.clientY-rect.top)/rect.height).toFixed(3));
-    });
+      state.active=true;
+      state.tx=clamp((e.clientX-rect.left)/rect.width,0,1);
+      state.ty=clamp((e.clientY-rect.top)/rect.height,0,1);
+      wake();
+    },{passive:true});
+
     btn.addEventListener('pointerleave',()=>{
-      btn.style.removeProperty('--mx');
-      btn.style.removeProperty('--my');
-    });
+      state.active=false;
+      state.tx=.5;
+      state.ty=.5;
+      wake();
+    },{passive:true});
+
+    btn.addEventListener('pointercancel',()=>{
+      state.active=false;
+      state.tx=.5;
+      state.ty=.5;
+      wake();
+    },{passive:true});
   });
 }
 
@@ -1660,7 +1784,7 @@ function showAI(step){
   setGState('thinking');
   body.innerHTML=`
     <div class="ai-thinking" id="__stepwrap" data-label="${esc(label)}">
-      <span id="__step" style="opacity:0">${esc(label)}</span>
+      <span id="__step">${esc(label)}</span>
     </div>
     <div class="aistep" aria-hidden="true"></div>`;
   w.append(body);ci.appendChild(w);_ai=w;s2b();
@@ -1671,6 +1795,8 @@ function updAI(step){
   if(el){
     const next=step||'Thinking.';
     el.textContent=next;
+    const wrap=document.getElementById('__stepwrap');
+    if(wrap) wrap.setAttribute('data-label', next);
     return;
   }
   showAI(step);
@@ -1858,108 +1984,7 @@ function taskCardHTML(t,i,newClass=''){
   }
 }
 
-function createTaskCardNode(t,i,newClass=''){
-  const pr=(t.priority||'').toLowerCase();
-  const pc={'high':'ph','medium':'pm','low':'pl'}[pr]||'';
-  const sc={'Done':'td','In progress':'tp','Planned':'tpl'}[t.status]||'tn';
-  const pct={'High':'thi','Medium':'tme','Low':'tlo'}[t.priority]||'';
-  const done=t.status==='Done';
-  const due=t.due?fmtDue(t.due):'';
-  const pinned=(t.priority==='High'||t.status==='In progress')?'1':'0';
-  const idRaw=String(t.id||`task-${i}`);
 
-  const card=document.createElement('div');
-  card.className=`tcard glass ${pc}${newClass}`.trim();
-  card.dataset.id=idRaw;
-  card.dataset.status=String(t.status||'').toLowerCase();
-  card.dataset.title=String(t.title||'Untitled task').toLowerCase();
-  card.dataset.pinned=pinned;
-  card.draggable=true;
-  card.style.animationDelay=(i*.02)+'s';
-
-  const head=document.createElement('div');
-  head.className='tc-head';
-
-  const check=document.createElement('button');
-  check.className='tc-check'+(done?' is-done':'');
-  check.setAttribute('aria-label','Toggle task done');
-  check.textContent=done?'✓':'';
-  check.onclick=()=>toggleTaskDone(idRaw,check);
-
-  const main=document.createElement('div');
-  main.className='tc-main';
-  const title=document.createElement('div');
-  title.className='tc-title';
-  title.textContent=String(t.title||'Untitled task');
-  main.appendChild(title);
-  if(t.summary){
-    const sum=document.createElement('div');
-    sum.className='tc-sum';
-    sum.textContent=String(t.summary);
-    main.appendChild(sum);
-  }
-
-  const handle=document.createElement('span');
-  handle.className='tc-handle';
-  handle.textContent='⋮⋮';
-
-  head.appendChild(check);
-  head.appendChild(main);
-  head.appendChild(handle);
-
-  const foot=document.createElement('div');
-  foot.className='tc-foot';
-  const tags=document.createElement('div');
-  tags.className='tc-tags';
-
-  const st=document.createElement('span');
-  st.className=`tag status-tag ${sc}`;
-  st.textContent=String(t.status||'Not started');
-  tags.appendChild(st);
-
-  if(t.priority){
-    const p=document.createElement('span');
-    p.className=`tag ${pct}`;
-    p.textContent=String(t.priority);
-    tags.appendChild(p);
-  }
-  if(t.effort){
-    const e=document.createElement('span');
-    e.className='tag tef';
-    e.textContent=String(t.effort);
-    tags.appendChild(e);
-  }
-  if(due){
-    const d=document.createElement('span');
-    d.className='tag tdu';
-    d.textContent=String(due);
-    tags.appendChild(d);
-  }
-  foot.appendChild(tags);
-
-  const actions=document.createElement('div');
-  actions.className='tc-actions';
-  const bDone=document.createElement('button');
-  bDone.className='tc-btn glass liquid-btn done';
-  bDone.textContent='Done';
-  bDone.onclick=()=>markDone(idRaw,bDone);
-  const bProg=document.createElement('button');
-  bProg.className='tc-btn glass liquid-btn';
-  bProg.textContent='Progress';
-  bProg.onclick=()=>markInProg(idRaw,bProg);
-  const bDel=document.createElement('button');
-  bDel.className='tc-btn glass liquid-btn danger';
-  bDel.textContent='Delete';
-  bDel.onclick=()=>deleteTask(idRaw,bDel);
-  actions.appendChild(bDone);
-  actions.appendChild(bProg);
-  actions.appendChild(bDel);
-
-  card.appendChild(head);
-  card.appendChild(foot);
-  card.appendChild(actions);
-  return card;
-}
 
 function renderTasksDOMFallback(container,tasks){
   if(!container || !Array.isArray(tasks) || !tasks.length) return false;
@@ -1980,12 +2005,17 @@ function renderTasksDOMFallback(container,tasks){
       </div>
     </div>`;
 
-  const frag=document.createDocumentFragment();
-  tasks.forEach((t,i)=>{
+  const cardsHtml = tasks.map((t,i) => {
     const newClass=LAST_TASK_IDS.includes(t.id)?'':' new';
-    frag.appendChild(createTaskCardNode(t,i,newClass));
-  });
-  container.appendChild(frag);
+    return taskCardHTML(t,i,newClass);
+  }).join('');
+  
+  const listContainer = document.createElement('div');
+  listContainer.id = 'tasks-list-container';
+  listContainer.className = 'task-grid';
+  listContainer.innerHTML = cardsHtml;
+  
+  container.appendChild(listContainer);
   return container.querySelectorAll('.tcard').length>0;
 }
 
@@ -2212,7 +2242,7 @@ function applyTaskFilters(){
   const empty=document.getElementById('__task-filter-empty');
   if(!visible && cards.length){
     if(!empty){
-      const g=document.getElementById('tg');
+      const g=document.getElementById('tasks-list-container') || document.getElementById('tg');
       const el=document.createElement('div');
       el.id='__task-filter-empty';
       el.className='empty';

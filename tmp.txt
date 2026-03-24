@@ -1,0 +1,120 @@
+    const titleLower=titleText.toLowerCase();
+    return `
+      <div class="tcard glass ${pc}${newClass}" data-id="${idAttr}" data-status="${escAttr((t.status||'').toLowerCase())}" data-title="${escAttr(titleLower)}" data-pinned="${pinned}" draggable="true" style="animation-delay:${animDelay}s">
+        <div class="tc-head">
+          <button class="tc-check ${done?'is-done':''}" aria-label="Toggle task done" onclick="toggleTaskDone('${idJs}',this)">${done?'✓':''}</button>
+          <div class="tc-main">
+            <div class="tc-title">${esc(titleText)}</div>
+            ${t.summary?`<div class="tc-sum">${esc(String(t.summary))}</div>`:''}
+          </div>
+          <span class="tc-handle">⋮⋮</span>
+        </div>
+        <div class="tc-foot">
+          <div class="tc-tags">
+            <span class="tag status-tag ${sc}">${esc(String(t.status||'Not started'))}</span>
+            ${t.priority?`<span class="tag ${pct}">${esc(String(t.priority))}</span>`:''}
+            ${t.effort?`<span class="tag tef">${esc(String(t.effort))}</span>`:''}
+            ${due?`<span class="tag tdu">${esc(String(due))}</span>`:''}
+          </div>
+        </div>
+        <div class="tc-actions">
+          <button class="tc-btn glass liquid-btn done" onclick="markDone('${idJs}',this)">Done</button>
+          <button class="tc-btn glass liquid-btn" onclick="markInProg('${idJs}',this)">Progress</button>
+          <button class="tc-btn glass liquid-btn danger" onclick="deleteTask('${idJs}',this)">Delete</button>
+        </div>
+      </div>`;
+  }catch(err){
+    console.warn('Skipping malformed task row',t,err);
+    return '';
+  }
+}
+
+function createTaskCardNode(t,i,newClass=''){
+  const pr=(t.priority||'').toLowerCase();
+  const pc={'high':'ph','medium':'pm','low':'pl'}[pr]||'';
+  const sc={'Done':'td','In progress':'tp','Planned':'tpl'}[t.status]||'tn';
+  const pct={'High':'thi','Medium':'tme','Low':'tlo'}[t.priority]||'';
+  const done=t.status==='Done';
+  const due=t.due?fmtDue(t.due):'';
+  const pinned=(t.priority==='High'||t.status==='In progress')?'1':'0';
+  const idRaw=String(t.id||`task-${i}`);
+
+  const card=document.createElement('div');
+  card.className=`tcard glass ${pc}${newClass}`.trim();
+  card.dataset.id=idRaw;
+  card.dataset.status=String(t.status||'').toLowerCase();
+  card.dataset.title=String(t.title||'Untitled task').toLowerCase();
+  card.dataset.pinned=pinned;
+  card.draggable=true;
+  card.style.animationDelay=(i*.02)+'s';
+
+  const head=document.createElement('div');
+  head.className='tc-head';
+
+  const check=document.createElement('button');
+  check.className='tc-check'+(done?' is-done':'');
+  check.setAttribute('aria-label','Toggle task done');
+  check.textContent=done?'✓':'';
+  check.onclick=()=>toggleTaskDone(idRaw,check);
+
+  const main=document.createElement('div');
+  main.className='tc-main';
+  const title=document.createElement('div');
+  title.className='tc-title';
+  title.textContent=String(t.title||'Untitled task');
+  main.appendChild(title);
+  if(t.summary){
+    const sum=document.createElement('div');
+    sum.className='tc-sum';
+    sum.textContent=String(t.summary);
+    main.appendChild(sum);
+  }
+
+  const handle=document.createElement('span');
+  handle.className='tc-handle';
+  handle.textContent='⋮⋮';
+
+  head.appendChild(check);
+  head.appendChild(main);
+  head.appendChild(handle);
+
+  const foot=document.createElement('div');
+  foot.className='tc-foot';
+  const tags=document.createElement('div');
+  tags.className='tc-tags';
+
+  const st=document.createElement('span');
+  st.className=`tag status-tag ${sc}`;
+  st.textContent=String(t.status||'Not started');
+  tags.appendChild(st);
+
+  if(t.priority){
+    const p=document.createElement('span');
+    p.className=`tag ${pct}`;
+    p.textContent=String(t.priority);
+    tags.appendChild(p);
+  }
+  if(t.effort){
+    const e=document.createElement('span');
+    e.className='tag tef';
+    e.textContent=String(t.effort);
+    tags.appendChild(e);
+  }
+  if(due){
+    const d=document.createElement('span');
+    d.className='tag tdu';
+    d.textContent=String(due);
+    tags.appendChild(d);
+  }
+  foot.appendChild(tags);
+
+  const actions=document.createElement('div');
+  actions.className='tc-actions';
+  const bDone=document.createElement('button');
+  bDone.className='tc-btn glass liquid-btn done';
+  bDone.textContent='Done';
+  bDone.onclick=()=>markDone(idRaw,bDone);
+  const bProg=document.createElement('button');
+  bProg.className='tc-btn glass liquid-btn';
+  bProg.textContent='Progress';
+  bProg.onclick=()=>markInProg(idRaw,bProg);
