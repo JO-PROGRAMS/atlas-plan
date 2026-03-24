@@ -230,8 +230,25 @@ class LocalDBClient:
     def fetch_all_tasks(self) -> List[Dict[str, Any]]:
         try:
             db = self._db()
-            items, _ = self._crud.get_tasks(db, TaskFilter(page_size=200))
-            return [self._task_to_dict(t) for t in items]
+            out: List[Dict[str, Any]] = []
+            page = 1
+            page_size = 200
+            total = None
+            while True:
+                items, total_count = self._crud.get_tasks(db, TaskFilter(page=page, page_size=page_size))
+                if total is None:
+                    total = int(total_count or 0)
+                if not items:
+                    break
+                for t in items:
+                    try:
+                        out.append(self._task_to_dict(t))
+                    except Exception as row_exc:
+                        self._log("WARN", "fetch_all_tasks", f"skip malformed row: {row_exc}", {"task_id": getattr(t, "id", "unknown")})
+                if len(out) >= total or len(items) < page_size:
+                    break
+                page += 1
+            return out
         except Exception as exc:
             self._log("ERROR", "fetch_all_tasks", str(exc))
             return []
@@ -250,7 +267,13 @@ class LocalDBClient:
             items, _ = self._crud.get_tasks(
                 db, TaskFilter(status=self._to_enum(status, self._StatusEnum, None), page_size=200)
             )
-            return [self._task_to_dict(t) for t in items]
+            out: List[Dict[str, Any]] = []
+            for t in items:
+                try:
+                    out.append(self._task_to_dict(t))
+                except Exception as row_exc:
+                    self._log("WARN", "fetch_tasks_by_status", f"skip malformed row: {row_exc}", {"task_id": getattr(t, "id", "unknown")})
+            return out
         except Exception as exc:
             self._log("ERROR", "fetch_tasks_by_status", str(exc))
             return []
@@ -339,6 +362,14 @@ class LocalDBClient:
 
     @staticmethod
     def _task_to_dict(task: Any) -> Dict[str, Any]:
+        def safe_iso(v: Any) -> str:
+            if not v:
+                return ""
+            try:
+                return v.isoformat() if hasattr(v, "isoformat") else str(v)
+            except Exception:
+                return str(v)
+
         return {
             "id": task.id,
             "task_name": task.task_name,
@@ -346,12 +377,12 @@ class LocalDBClient:
             "priority": task.priority,
             "effort_level": task.effort_level or "",
             "summary": task.summary or "",
-            "due_date": task.due_date.isoformat() if task.due_date else "",
-            "due": task.due_date.isoformat() if task.due_date else "",
+            "due_date": safe_iso(task.due_date),
+            "due": safe_iso(task.due_date),
             "position": task.position,
             "archived": task.archived,
-            "created_at": task.created_at.isoformat() if task.created_at else "",
-            "updated_at": task.updated_at.isoformat() if task.updated_at else "",
+            "created_at": safe_iso(task.created_at),
+            "updated_at": safe_iso(task.updated_at),
         }
 
     @staticmethod

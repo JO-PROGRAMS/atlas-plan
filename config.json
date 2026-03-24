@@ -1,14 +1,14 @@
 {
-  "gemini_api_key": "",
+  "gemini_api_key": "AIzaSyAKBDeq0ktBH_oyRSqIAG1YoRzmsB1P_JE",
   "model_name": "gemini-2.5-flash",
   "personality": "You are Atlas, a world-class AI study coach and task planner\nfor a highly motivated 16-year-old student targeting an A* in mathematics.\n\nCore principles:\n- Break every goal into small, concrete, time-boxed tasks.\n- Prioritise understanding and intuition over rote memorisation.\n- Be honest about difficulty \u2013 don't sugarcoat hard topics.\n- Balance ambition with sustainability: avoid burnout.\n- Reference past performance patterns to make smarter plans.\n- Your goal is to get this student an A* in maths.",
-  "notion_token": "",
-  "data_source": "notion",
+  "notion_token": "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",
+  "data_source": "local",
   "study_lists": [
     {
       "name": "Main",
-      "database_id": "",
-      "study_log_page_id": ""
+      "database_id": "31f685ea2e9b803eab7af1ca5dae473f",
+      "study_log_page_id": "31c685ea2e9b80c8b1dad6d2276dc170"
     }
   ],
   "active_study_list_index": 0

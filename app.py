@@ -101,6 +101,7 @@ async def startup():
 config_manager: Optional[Any]       = None
 agent:          Optional[AtlasAgent] = None
 _NOTIFICATIONS: collections.deque   = collections.deque(maxlen=50)
+_AGENT_LOCK = threading.RLock()
 
 
 def push_notif(title: str, body: str, level: str = "info") -> None:
@@ -119,8 +120,8 @@ def init_atlas() -> None:
     if not AGENT_AVAILABLE:
         return
     try:
-        config_manager = ConfigManager()
-        cfg   = config_manager.config
+        new_config_manager = ConfigManager()
+        cfg   = new_config_manager.config
         gem   = GeminiClient(cfg.gemini_api_key, cfg.model_name)
         if not cfg.study_lists:
             cfg.study_lists = AppConfig().study_lists
@@ -129,14 +130,78 @@ def init_atlas() -> None:
         local_db = LocalTaskDB()
         notion = NotionClient(cfg.notion_token, space.database_id, space.study_log_page_id, logger=_dbg)
         service = TaskService(cfg.data_source, notion, local_db, logger=_dbg)
-        agent = AtlasAgent(config=cfg, gemini=gem, db=service)
+        new_agent = AtlasAgent(config=cfg, gemini=gem, db=service)
+        with _AGENT_LOCK:
+            config_manager = new_config_manager
+            agent = new_agent
         _dbg("INFO", "server", "Atlas initialised", {"model": cfg.model_name, "data_source": cfg.data_source})
         push_notif("Atlas ready", f"{service.effective_source().upper()} · {cfg.model_name}", "success")
         print(f"[Server] ✓ Atlas ready  model={cfg.model_name} source={service.effective_source()}")
     except Exception as e:
         _dbg("ERROR", "server", f"Init error: {e}")
         push_notif("Init failed", str(e), "error")
-        agent = None
+
+
+def _task_snapshot() -> Dict[str, Any]:
+    """Canonical task snapshot used by /api/status and /api/tasks."""
+    with _AGENT_LOCK:
+        local_agent = agent
+        local_config = config_manager
+
+    if not local_agent:
+        return {
+            "tasks": [],
+            "task_count": 0,
+            "status": {
+                "data_source": "local",
+                "effective_source": "local",
+                "notion_ready": False,
+                "last_fallback": "agent unavailable",
+                "notion_last_error": None,
+            },
+            "model": local_config.config.model_name if local_config else "—",
+        }
+
+    tasks: List[Dict[str, Any]] = []
+    svc_status: Dict[str, Any] = {}
+    try:
+        tasks = local_agent.db.fetch_all_tasks()
+    except Exception as e:
+        _dbg("ERROR", "tasks", f"snapshot fetch failed: {e}")
+        tasks = []
+    try:
+        if hasattr(local_agent.db, "status"):
+            svc_status = local_agent.db.status()
+    except Exception:
+        svc_status = {}
+
+    ui_tasks = [
+        {
+            "id": t.get("id", ""),
+            "title": t.get("task_name") or t.get("title") or "Untitled task",
+            "task_name": t.get("task_name") or t.get("title") or "Untitled task",
+            "status": t.get("status", "Not started"),
+            "priority": t.get("priority", ""),
+            "effort": t.get("effort_level") or t.get("effort") or "",
+            "due": t.get("due") or t.get("due_date") or "",
+            "summary": t.get("summary") or "",
+            "position": t.get("position", 0),
+        }
+        for t in tasks
+    ]
+
+    return {
+        "tasks": ui_tasks,
+        "task_count": len(ui_tasks),
+        "status": {
+            "data_source": svc_status.get("data_source", "local"),
+            "effective_source": svc_status.get("effective_source", "local"),
+            "notion_ready": svc_status.get("notion_ready", False),
+            "last_fallback": svc_status.get("last_fallback"),
+            "notion_last_error": svc_status.get("notion_last_error"),
+        },
+        "model": local_config.config.model_name if local_config else "—",
+    }
 
 # =============================================================================
 # UI
@@ -162,28 +227,22 @@ async def index():
 
 @app.get("/api/status")
 async def api_status():
-    task_cnt = 0
-    svc_status: Dict[str, Any] = {}
-    if agent:
-        try:
-            task_cnt = len(agent.db.fetch_all_tasks())
-            if hasattr(agent.db, "status"):
-                svc_status = agent.db.status()
-        except Exception:
-            pass
+    snap = _task_snapshot()
+    with _AGENT_LOCK:
+        has_agent = agent is not None
     return {
-        "agent":      agent is not None,
+        "agent":      has_agent,
         "db":         BACKEND_AVAILABLE,
         "db_path":    str(DB_PATH),
-        "model":      config_manager.config.model_name if config_manager else "—",
+        "model":      snap.get("model", "—"),
         "date":       date.today().isoformat(),
         "local_time": fmt_local("%Y-%m-%d %H:%M"),
-        "task_count": task_cnt,
-        "data_source": svc_status.get("data_source", "local"),
-        "effective_source": svc_status.get("effective_source", "local"),
-        "notion_ready": svc_status.get("notion_ready", False),
-        "last_fallback": svc_status.get("last_fallback"),
-        "notion_last_error": svc_status.get("notion_last_error"),
+        "task_count": snap.get("task_count", 0),
+        "data_source": snap["status"].get("data_source", "local"),
+        "effective_source": snap["status"].get("effective_source", "local"),
+        "notion_ready": snap["status"].get("notion_ready", False),
+        "last_fallback": snap["status"].get("last_fallback"),
+        "notion_last_error": snap["status"].get("notion_last_error"),
     }
 
 # =============================================================================
@@ -267,23 +326,8 @@ async def api_chat(request: Request):
 
 @app.get("/api/tasks")
 async def api_tasks_list():
-    if not agent:
-        return JSONResponse([])
-    tasks = agent.db.fetch_all_tasks()
-    return JSONResponse([
-        {
-            "id":        t["id"],
-            "title":     t["task_name"],
-            "task_name": t["task_name"],
-            "status":    t["status"],
-            "priority":  t["priority"],
-            "effort":    t.get("effort_level", ""),
-            "due":       t.get("due", "") or t.get("due_date", ""),
-            "summary":   t.get("summary", ""),
-            "position":  t.get("position", 0),
-        }
-        for t in tasks
-    ])
+    snap = _task_snapshot()
+    return JSONResponse(snap.get("tasks", []))
 
 
 @app.patch("/api/tasks/{task_id}/status")
@@ -429,9 +473,11 @@ async def api_notion_test_compat():
 
 @app.get("/api/config")
 async def api_config_get():
-    if not config_manager:
+    with _AGENT_LOCK:
+        cm = config_manager
+    if not cm:
         raise HTTPException(status_code=500, detail="no config manager")
-    cfg = config_manager.config
+    cfg = cm.config
     return {
         "gemini_api_key": cfg.gemini_api_key,
         "model_name":     cfg.model_name,
@@ -452,10 +498,12 @@ async def api_config_get():
 
 @app.post("/api/config")
 async def api_config_post(request: Request):
-    if not config_manager:
+    with _AGENT_LOCK:
+        cm = config_manager
+    if not cm:
         raise HTTPException(status_code=500, detail="no config manager")
     d   = await request.json()
-    cfg = config_manager.config
+    cfg = cm.config
     if d.get("gemini_api_key"): cfg.gemini_api_key = d["gemini_api_key"]
     if d.get("model_name"):     cfg.model_name     = d["model_name"]
     if d.get("personality"):    save_personality(d["personality"])
@@ -481,7 +529,8 @@ async def api_config_post(request: Request):
             cfg.active_study_list_index = int(d["active_index"])
         except Exception:
             pass
-    config_manager.save(cfg)
+    with _AGENT_LOCK:
+        cm.save(cfg)
     init_atlas()
     push_notif("Settings saved", "Reconnecting…", "info")
     return {"ok": True}
