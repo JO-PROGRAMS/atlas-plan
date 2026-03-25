@@ -28,7 +28,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
+try:
+    from dotenv import load_dotenv
+except Exception:
+    load_dotenv = None
+
 sys.path.insert(0, os.path.dirname(__file__))
+
+if load_dotenv:
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 try:
     from agent import (
@@ -477,12 +485,15 @@ async def api_config_get():
         cm = config_manager
     if not cm:
         raise HTTPException(status_code=500, detail="no config manager")
+    cm._apply_env_overrides(cm.config)
     cfg = cm.config
     return {
-        "gemini_api_key": cfg.gemini_api_key,
+        "gemini_api_key": "",
+        "gemini_api_key_configured": bool(cfg.gemini_api_key),
         "model_name":     cfg.model_name,
         "personality":    load_personality(),
-        "notion_token":   cfg.notion_token,
+        "notion_token":   "",
+        "notion_token_configured": bool(cfg.notion_token),
         "study_lists":    [
             {
                 "name": s.name,
@@ -504,11 +515,9 @@ async def api_config_post(request: Request):
         raise HTTPException(status_code=500, detail="no config manager")
     d   = await request.json()
     cfg = cm.config
-    if d.get("gemini_api_key"): cfg.gemini_api_key = d["gemini_api_key"]
+    # API keys are env-only; ignore any key values sent by clients.
     if d.get("model_name"):     cfg.model_name     = d["model_name"]
     if d.get("personality"):    save_personality(d["personality"])
-    if "notion_token" in d:
-        cfg.notion_token = d.get("notion_token") or ""
     if "data_source" in d:
         ds = (d.get("data_source") or "local").lower()
         if ds not in {"local", "notion"}:

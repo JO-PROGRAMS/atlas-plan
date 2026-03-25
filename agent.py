@@ -78,7 +78,7 @@ except Exception:
     load_dotenv = None
 
 if load_dotenv:
-    load_dotenv()
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 try:
     from google import genai
@@ -274,15 +274,14 @@ class ConfigManager:
             return cfg
 
     def _apply_env_overrides(self, cfg: AppConfig) -> None:
-        gemini = os.getenv("GEMINI") or os.getenv("GEMINI_API_KEY")
-        notion = os.getenv("NOTION_AUTH") or os.getenv("NOTION_TOKEN")
+        # API keys are sourced from local .env only, never from config.json.
+        gemini = (os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI") or "").strip()
+        notion = (os.getenv("NOTION_TOKEN") or os.getenv("NOTION_AUTH") or "").strip()
         db_id = os.getenv("DATABASE_ID") or os.getenv("NOTION_DATABASE_ID")
         page_id = os.getenv("PAGE_ID") or os.getenv("STUDY_LOG_PAGE_ID")
 
-        if gemini:
-            cfg.gemini_api_key = gemini
-        if notion:
-            cfg.notion_token = notion
+        cfg.gemini_api_key = gemini
+        cfg.notion_token = notion
 
         if not cfg.study_lists:
             cfg.study_lists = [StudyListConfig()]
@@ -296,8 +295,13 @@ class ConfigManager:
         if cfg:
             self.config = cfg
         try:
+            # Never persist API keys; runtime always resolves from .env.
+            self._apply_env_overrides(self.config)
+            data = self.config.to_dict()
+            data["gemini_api_key"] = ""
+            data["notion_token"] = ""
             with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(self.config.to_dict(), f, indent=2)
+                json.dump(data, f, indent=2)
         except Exception as e:
             print(f"[Config] Write error: {e}")
 

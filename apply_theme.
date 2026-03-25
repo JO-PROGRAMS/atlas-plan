@@ -1,0 +1,26 @@
+import re
+
+with open("index.html", "r") as f:
+    content = f.read()
+
+# Replace :root colors
+content = re.sub(r"--bg:\s*(?:#|rgba)[^;]+;", "--bg: #0B0F14;", content)
+content = re.sub(r"--pane:\s*(?:#|rgba)[^;]+;", "--pane: rgba(20, 28, 36, 0.5);", content)
+content = re.sub(r"--t0:\s*(?:#|rgba)[^;]+;", "--t0: #F3F6FB;", content)
+content = re.sub(r"--t1:\s*(?:#|rgba)[^;]+;", "--t1: #A4B1C5;", content)
+content = re.sub(r"--t2:\s*(?:#|rgba)[^;]+;", "--t2: #73849A;", content)
+content = re.sub(r"--blue:\s*(?:#|rgba)[^;]+;", "--blue: #5B9CFF;", content)
+
+# Try body update
+new_body_bg = """
+    background-color: var(--bg);
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(91, 156, 255, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(164, 177, 197, 0.03) 0%, transparent 50%);
+    background-attachment: fixed;
+"""
+content = re.sub(r"background:\s*var\(--bg\);", new_body_bg, content, count=1)
+
+with open("index.html", "w") as f:
+    f.write(content)
+
