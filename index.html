@@ -8,10 +8,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
+
 body {
-  background: var(--bg);
-  color: var(--t1);
+    background-color: var(--bg);
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(91, 156, 255, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(164, 177, 197, 0.03) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: var(--t1);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 500;
 }
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: var(--t0);
+}
+
 #noise {
   position: fixed;
   top: 0; left: 0; width: 100vw; height: 100vh;
@@ -32,13 +44,51 @@ body {
   background: url('assets/default.avif') center/cover no-repeat;
   z-index: -2;
 }
+
 .tcard {
-  background: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: none !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 100px;
+    height: auto;
+    border-radius: 16px;
+    
+    /* Frosted glass */
+    background: rgba(20, 28, 36, 0.5);
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border: 1px solid var(--border);
+    
+    /* Subtle depth */
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.15), 
+        inset 0 1px 0 rgba(255, 255, 255, 0.08); /* top highlight */
+        
+    padding: 20px 24px;
+    cursor: grab;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
+                box-shadow 0.25s ease, 
+                border-color 0.25s ease;
+    
+    /* Zero layout clipping fixes */
+    overflow: hidden;
+    isolation: isolate;
 }
+
+/* Subtle edge shimmer on hover */
+.tcard:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 
+        0 12px 48px rgba(0, 0, 0, 0.25), 
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transform: translateY(-2px);
+}
+
 .tcard::before, .tcard::after { display: none !important; }
 
 
@@ -54,19 +104,19 @@ color:#F7F7F8;font-family:var(--font-ui),system-ui,-apple-system,"Segoe UI",sans
         --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --font-accent: 'Inter', system-ui, -apple-system, sans-serif;
-  --bg: #0a0e17;
+  --bg: #0B0F14;
   --bg1: #101524;
   --bg2: #161d30;
-  --t0: #ffffff;
-  --t1: #e2e8f0;
-  --t2: #94a3b8;
-  --blue: #5b9cff;
+  --t0: #F3F6FB;
+  --t1: #A4B1C5;
+  --t2: #73849A;
+  --blue: #5B9CFF;
   --blue2: #2a5fb8;
   --teal: #9bc3ff;
-  --t0: #ffffff;
-  --t1: #e2e8f0;
-  --t2: #94a3b8;
-  --blue: #5b9cff;
+  --t0: #F3F6FB;
+  --t1: #A4B1C5;
+  --t2: #73849A;
+  --blue: #5B9CFF;
   --blue2: #2a5fb8;
   --teal: #9bc3ff; --bg1: #161618; --bg2: #1e1e20; --bg1: #161618; --bg2: #1e1e20;
   --bg1:   #252525;
@@ -76,12 +126,12 @@ color:#F7F7F8;font-family:var(--font-ui),system-ui,-apple-system,"Segoe UI",sans
   --rim:   rgba(255,255,255,.04);
   --rim2:  rgba(255,255,255,.08);
   --rim3:  rgba(255,255,255,.12);
-  --t0:    #fafafa;
-  --t1:    #f4f4f5;
-  --t2:    #a1a1aa;
+  --t0: #F3F6FB;
+  --t1: #A4B1C5;
+  --t2: #73849A;
   --t3:    #71717a;
   --t4:    #52525b;
-  --blue:  #3b82f6;
+  --blue: #5B9CFF;
   --blue2: #2563eb;
   --teal:  #14b8a6;
   --grn:   #10b981;
@@ -531,25 +581,7 @@ textarea:focus-visible{
   box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .tgrid .empty{max-width:920px;margin:0 auto;color:var(--t3);width:100%}
-.tcard{width:100%;max-width:920px;margin:0 auto;display:flex;flex-direction:column;justify-content:flex-start;gap:12px;min-height:100px;height:auto;border-radius:24px;background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;box-shadow:none !important;border:1px solid rgba(255,255,255,0.08) !important;padding:24px;position:relative;cursor:grab;transition:transform 0.3s cubic-bezier(0.2,0.8,0.2,1);}
-.tcard::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;z-index:1;opacity:.24;padding:1.2px;
-  background:conic-gradient(from calc((var(--drag-x) + var(--drag-y)) * 180deg),rgba(255,108,130,.86),rgba(255,191,105,.86),rgba(253,242,120,.8),rgba(130,246,189,.82),rgba(125,211,252,.86),rgba(167,139,250,.88),rgba(244,114,182,.86),rgba(255,108,130,.86));
-  filter:saturate(calc(1.05 + var(--drag-v) * .95)) blur(calc(.45px + var(--drag-v) * 1.4px));
-  mix-blend-mode:screen;
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;
-  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  mask-composite:exclude;
-  transition:opacity .24s var(--ease-fluid),transform .24s var(--ease-fluid),filter .24s var(--ease-fluid);
-}
-.tcard::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;opacity:.3;background:
-  radial-gradient(220px 170px at calc(var(--drag-x) * 100%) calc(var(--drag-y) * 100%), rgba(176,220,255,calc(.2 * var(--edge-clamp))), rgba(176,220,255,0) 72%),
-  radial-gradient(130px 120px at calc((1 - var(--drag-x)) * 100%) calc((1 - var(--drag-y)) * 100%), rgba(206,233,255,calc(.09 * var(--drag-v))), rgba(206,233,255,0) 70%),
-  linear-gradient(125deg, rgba(255,255,255,.12), rgba(255,255,255,0) 54%);
-  backdrop-filter:blur(calc(18px + (var(--drag-v) * 12px))) saturate(calc(1.16 + (var(--drag-v) * .26)));
-  -webkit-backdrop-filter:blur(calc(18px + (var(--drag-v) * 12px))) saturate(calc(1.16 + (var(--drag-v) * .26)));
-  transition:opacity .24s var(--ease-fluid),background-position .24s var(--ease-fluid),transform .24s var(--ease-fluid);
-}
+
 .tcard.pm::before,.tcard.pl::before,.tcard.phi::before{opacity:.16}
 .tcard:hover{transform:translateY(-2px)}
 .tcard:hover::before{opacity:.36}
@@ -599,7 +631,7 @@ textarea:focus-visible{
   .tasks-tools-top{gap:8px}
   .task-tabs{width:100%;min-width:0}
   .task-search{min-width:100%;order:3}
-  .tcard{border-radius:16px;padding:16px 12px 12px}
+  
   .tc-title{font-size:clamp(17px,7.2vw,28px)}
   .tc-check{width:34px;height:34px;font-size:18px}
   
@@ -866,7 +898,7 @@ body.focus-mode .topbar{opacity:.15}
   #gn{animation:none;opacity:.04}
   .chip,.icon-btn,.tcard,.save-btn,.new-chat-btn,.ni{transition:none!important}
   .ai-thinking::after{animation:none;opacity:.55}
-  .tcard::after{opacity:.34!important;backdrop-filter:blur(16px) saturate(1.1)!important;-webkit-backdrop-filter:blur(16px) saturate(1.1)!important}
+
 }
 
 @media (pointer:coarse){
